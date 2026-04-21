@@ -86,14 +86,30 @@ export default function App() {
   const [claimedBalance, setClaimedBalance] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
+    // Check for existing session
+    const saved = localStorage.getItem('canton_wallet');
+    if (saved) setWalletAddress(saved);
+  }, []);
+
+  const handleConnect = (partyId: string) => {
+    setIsConnecting(true);
+    // Artificial delay for 'ledger handshake' feel
+    setTimeout(() => {
+      setWalletAddress(partyId);
+      localStorage.setItem('canton_wallet', partyId);
+      setIsConnecting(false);
+      addToast(`Connected to Canton as ${partyId}`);
+    }, 800);
+  };
+
+  const handleLogout = () => {
+    setWalletAddress(null);
+    localStorage.removeItem('canton_wallet');
+  };
 
   // Initial Data Fetch from Canton Ledger
   useEffect(() => {
@@ -257,59 +273,79 @@ export default function App() {
             >
               <i className={`bx ${isDarkMode ? 'bx-sun' : 'bx-moon'} text-xl`}></i>
             </button>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-lg">
-              <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
-              <span className="text-[10px] font-mono font-bold text-text-muted uppercase tracking-tight">Sync Online</span>
-            </div>
+            {walletAddress ? (
+              <div className="flex items-center gap-3 pl-3 border-l border-border">
+                <div className="text-right">
+                  <p className="text-[8px] font-bold text-text-muted uppercase tracking-widest">Active Identity</p>
+                  <p className="text-xs font-mono font-bold text-accent truncate max-w-[120px]">{walletAddress}</p>
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className="w-8 h-8 flex items-center justify-center bg-surface-hover hover:bg-bg border border-border rounded-lg text-red-500 transition-colors"
+                  title="Disconnect Wallet"
+                >
+                  <i className='bx bx-log-out text-base'></i>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-lg">
+                <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+                <span className="text-[10px] font-mono font-bold text-text-muted uppercase tracking-tight">Sync Online</span>
+              </div>
+            )}
           </div>
         </div>
       </nav>
 
       <main className="pt-36 md:pt-28 pb-20 px-4 md:px-6 max-w-7xl mx-auto">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={role}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3 }}
-            className="grid grid-cols-1 lg:grid-cols-12 gap-8"
-          >
-            {/* Left Column: View Specific Content */}
-            <div className="lg:col-span-8 space-y-8">
-              {role === 'organizer' && (
-                <OrganizerView events={events} onAddEvent={(e) => setEvents([...events, e])} />
-              )}
-              {role === 'user' && (
-                <UserView 
-                  events={events} 
-                  tickets={userTickets} 
-                  onBuy={handleBuyTicket} 
-                  onSell={handleListTicket} 
-                />
-              )}
-              {role === 'artist' && (
-                <ArtistView 
-                  balance={artistBalance} 
-                  claimed={claimedBalance} 
-                  onClaim={() => {
-                    setClaimedBalance(prev => prev + artistBalance);
-                    setArtistBalance(0);
-                  }}
-                />
-              )}
-            </div>
+        {!walletAddress ? (
+          <WalletLoginPage onConnect={handleConnect} isConnecting={isConnecting} />
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={role}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+            >
+              {/* ... existing main layout ... */}
+              <div className="lg:col-span-8 space-y-8">
+                {role === 'organizer' && (
+                  <OrganizerView events={events} onAddEvent={(e) => setEvents([...events, e])} />
+                )}
+                {role === 'user' && (
+                  <UserView 
+                    events={events} 
+                    tickets={userTickets} 
+                    onBuy={handleBuyTicket} 
+                    onSell={handleListTicket} 
+                  />
+                )}
+                {role === 'artist' && (
+                  <ArtistView 
+                    balance={artistBalance} 
+                    claimed={claimedBalance} 
+                    onClaim={() => {
+                      setClaimedBalance(prev => prev + artistBalance);
+                      setArtistBalance(0);
+                    }}
+                  />
+                )}
+              </div>
 
-            {/* Right Column: Shared Ledger & Global Stats */}
-            <div className="lg:col-span-4 space-y-8">
-              <LedgerFeed transactions={transactions} />
-              <GlobalStats 
-                secondarySales={totalSecondarySales} 
-                totalRoyalty={totalRoyaltyGenerated} 
-              />
-            </div>
-          </motion.div>
-        </AnimatePresence>
+              {/* Right Column: Shared Ledger & Global Stats */}
+              <div className="lg:col-span-4 space-y-8">
+                <LedgerFeed transactions={transactions} />
+                <GlobalStats 
+                  secondarySales={totalSecondarySales} 
+                  totalRoyalty={totalRoyaltyGenerated} 
+                />
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        )}
       </main>
     </div>
   );
@@ -666,3 +702,74 @@ const GlobalStats = ({ secondarySales, totalRoyalty }: { secondarySales: number,
     </div>
   );
 };
+
+const WalletLoginPage = ({ onConnect, isConnecting }: { onConnect: (party: string) => void, isConnecting: boolean }) => {
+  const [partyInput, setPartyInput] = useState('UserParty');
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[70vh] py-12 px-4 text-center">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="w-full max-w-md space-y-8"
+      >
+        <div className="space-y-4">
+          <div className="w-20 h-20 bg-accent rounded-[32px] mx-auto flex items-center justify-center text-black shadow-[0_0_50px_rgba(200,240,90,0.4)] rotate-12">
+            <i className='bx bxs-wallet text-4xl'></i>
+          </div>
+          <div>
+            <h2 className="text-4xl font-extrabold tracking-tighter uppercase leading-tight">Canton Resonance</h2>
+            <p className="text-text-muted text-sm mt-4">Connect your ledger identity to participate.</p>
+          </div>
+        </div>
+
+        <div className="glass-card p-8 space-y-6">
+          <div className="space-y-2 text-left">
+            <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest pl-1">Protocol Identifier (Party ID)</label>
+            <div className="relative">
+              <i className='bx bx-fingerprint absolute left-4 top-1/2 -translate-y-1/2 text-accent'></i>
+              <input 
+                value={partyInput}
+                onChange={(e) => setPartyInput(e.target.value)}
+                className="w-full bg-bg border border-border rounded-xl pl-12 pr-4 py-3 text-sm focus:border-accent outline-none font-mono tracking-tight"
+                placeholder="e.g. UserParty::123..."
+              />
+            </div>
+          </div>
+
+          <button 
+            onClick={() => onConnect(partyInput)}
+            disabled={!partyInput || isConnecting}
+            className={`w-full py-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-3 ${
+              isConnecting 
+              ? 'bg-surface-hover text-text-muted cursor-not-allowed'
+              : 'bg-text-main text-bg hover:bg-accent hover:text-black active:scale-[0.98]'
+            }`}
+          >
+            {isConnecting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-text-muted border-t-transparent rounded-full animate-spin" />
+                Validating Identity...
+              </>
+            ) : (
+              <>
+                Connect Identity <i className='bx bx-right-arrow-alt text-xl'></i>
+              </>
+            )}
+          </button>
+
+          <p className="text-[9px] text-text-muted leading-relaxed">
+            By connecting, you authorize the Resonance Protocol to query ownership contracts indexed to this Party ID on the specified Canton Shard.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-center gap-8 opacity-40 grayscale hover:grayscale-0 transition-all">
+          <i className='bx bxl-visual-studio text-2xl'></i>
+          <i className='bx bxs-component text-2xl'></i>
+          <i className='bx bxs-adjust-alt text-2xl'></i>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
