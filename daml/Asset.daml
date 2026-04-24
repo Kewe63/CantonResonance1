@@ -1,0 +1,68 @@
+module Asset where
+
+import DA.Assert ((===))
+
+-- | Represents a fungible asset (e.g. USDC token) on the Canton ledger.
+-- This is a simplified IOU-style token for demonstration of real payment flows.
+template Asset
+  with
+    issuer   : Party
+    owner    : Party
+    currency : Text
+    amount   : Decimal
+  where
+    signatory issuer, owner
+    ensure amount > 0.0
+
+    -- Transfer the full asset to a new owner
+    choice Transfer : ContractId Asset
+      with
+        newOwner : Party
+      controller owner
+      do
+        create this with owner = newOwner
+
+    -- Split the asset into two: one with the given amount, remainder returned
+    choice Split : (ContractId Asset, ContractId Asset)
+      with
+        splitAmount : Decimal
+      controller owner
+      do
+        assertMsg "Split amount must be positive" (splitAmount > 0.0)
+        assertMsg "Split amount must be less than total" (splitAmount < amount)
+        part <- create this with amount = splitAmount
+        remainder <- create this with amount = amount - splitAmount
+        return (part, remainder)
+
+    -- Merge another asset into this one (must be same issuer, owner, currency)
+    choice Merge : ContractId Asset
+      with
+        otherCid : ContractId Asset
+      controller owner
+      do
+        other <- fetch otherCid
+        other.issuer === issuer
+        other.owner === owner
+        other.currency === currency
+        archive otherCid
+        create this with amount = amount + other.amount
+
+-- | A proposal to mint new tokens (issuer proposes, owner accepts)
+template AssetMintProposal
+  with
+    issuer   : Party
+    owner    : Party
+    currency : Text
+    amount   : Decimal
+  where
+    signatory issuer
+    observer owner
+
+    choice Accept_Mint : ContractId Asset
+      controller owner
+      do
+        create Asset with ..
+
+    choice Reject_Mint : ()
+      controller owner
+      do return ()

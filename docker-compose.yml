@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  # Canton Ledger Sandbox (Daml 2.10.4 on Linux)
+  sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    container_name: canton_sandbox
+    ports:
+      - "6865:6865" # gRPC Ledger API
+      - "7575:7575" # JSON API
+    restart: unless-stopped

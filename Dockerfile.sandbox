@@ -1,0 +1,29 @@
+FROM eclipse-temurin:11-jdk-jammy
+
+# Install curl
+RUN apt-get update && apt-get install -y curl tar && rm -rf /var/lib/apt/lists/*
+
+# Install Daml SDK 2.10.4 (Linux - no H2 bug here)
+RUN curl -sSL https://get.daml.com/ | sh -s 2.10.4
+
+# Add daml to PATH
+ENV PATH="/root/.daml/bin:${PATH}"
+
+WORKDIR /app
+
+# Copy daml files
+COPY daml.yaml .
+COPY daml/ ./daml/
+COPY canton-sandbox.conf .
+
+# Build project
+RUN daml build
+
+# Copy entrypoint script
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
+
+# Expose ports
+EXPOSE 6865 7575
+
+ENTRYPOINT ["/app/entrypoint.sh"]

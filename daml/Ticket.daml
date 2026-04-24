@@ -1,0 +1,247 @@
+module Ticket where
+
+import DA.Assert ((===))
+import DA.Optional (fromOptional)
+
+-- ═══════════════════════════════════════════════════════════════════
+-- EVENT — Primary event created by an organizer
+-- ═══════════════════════════════════════════════════════════════════
+template Event
+  with
+    organizer    : Party
+    artist       : Party
+    public       : Party
+    name         : Text
+    date         : Text
+    venue        : Text
+    totalTickets : Int
+    price        : Decimal
+    royaltyPct   : Decimal
+    ticketsSold  : Int
+    maxResaleMultiplier : Optional Decimal   -- e.g. Some 3.0 = max 3x original price
+    isCancelled  : Bool
+  where
+    signatory organizer
+    observer artist, public
+
+    ensure totalTickets > 0
+        && price > 0.0
+        && royaltyPct >= 0.0
+        && royaltyPct <= 50.0
+        && ticketsSold >= 0
+        && ticketsSold <= totalTickets
+
+    -- Buy a primary ticket
+    nonconsuming choice BuyTicket : (ContractId Event, ContractId UserTicket)
+      with
+        buyer : Party
+        seat  : Text
+      controller buyer
+      do
+        assertMsg "Event is cancelled!" (not isCancelled)
+        assertMsg "Tickets sold out!" (ticketsSold < totalTickets)
+
+        -- In production: atomic transfer of Asset (USDC) from buyer to organizer
+        -- would be enforced here via a multi-step workflow or DVP pattern
+
+        ticketId <- create UserTicket with
+          owner       = buyer
+          organizer   = organizer
+          artist      = artist
+          public      = public
+          eventName   = name
+          eventDate   = date
+          eventVenue  = venue
+          seat        = seat
+          originalPrice = price
+          currentPrice  = price
+          royaltyPct  = royaltyPct
+          maxResaleMultiplier = maxResaleMultiplier
+          isUsed      = False
+          transferCount = 0
+
+        archive self
+        newEventId <- create this with ticketsSold = ticketsSold + 1
+        return (newEventId, ticketId)
+
+    -- Cancel an event (refunds handled separately)
+    choice CancelEvent : ContractId Event
+      controller organizer
+      do
+        assertMsg "Already cancelled" (not isCancelled)
+        create this with isCancelled = True
+
+    -- Update event details (only before any tickets sold)
+    choice UpdateEvent : ContractId Event
+      with
+        newName  : Optional Text
+        newDate  : Optional Text
+        newVenue : Optional Text
+        newPrice : Optional Decimal
+      controller organizer
+      do
+        assertMsg "Cannot update after tickets sold" (ticketsSold == 0)
+        create this with
+          name  = fromOptional name newName
+          date  = fromOptional date newDate
+          venue = fromOptional venue newVenue
+          price = fromOptional price newPrice
+
+-- ═══════════════════════════════════════════════════════════════════
+-- USER TICKET — A purchased ticket in a user's wallet
+-- ═══════════════════════════════════════════════════════════════════
+template UserTicket
+  with
+    owner         : Party
+    organizer     : Party
+    artist        : Party
+    public        : Party
+    eventName     : Text
+    eventDate     : Text
+    eventVenue    : Text
+    seat          : Text
+    originalPrice : Decimal
+    currentPrice  : Decimal
+    royaltyPct    : Decimal
+    maxResaleMultiplier : Optional Decimal
+    isUsed        : Bool
+    transferCount : Int
+  where
+    signatory organizer, owner
+    observer artist, public
+
+    ensure originalPrice > 0.0
+
+    -- List the ticket on the secondary market
+    choice ListForSale : ContractId SecondaryListing
+      with
+        sellPrice : Decimal
+      controller owner
+      do
+        assertMsg "Ticket already used!" (not isUsed)
+        assertMsg "Price must be positive" (sellPrice > 0.0)
+
+        -- Enforce max resale price if set by organizer
+        case maxResaleMultiplier of
+          Some mult -> assertMsg
+            ("Resale price exceeds maximum: " <> show (originalPrice * mult))
+            (sellPrice <= originalPrice * mult)
+          None -> return ()
+
+        create SecondaryListing with
+          ticket    = this
+          seller    = owner
+          price     = sellPrice
+          createdAt = ""  -- Would use ledger effective time in production
+
+    -- Use the ticket (enter the event)
+    choice UseTicket : ContractId UsedTicket
+      controller owner
+      do
+        assertMsg "Ticket already used!" (not isUsed)
+        create UsedTicket with
+          owner     = owner
+          organizer = organizer
+          artist    = artist
+          eventName = eventName
+          eventDate = eventDate
+          seat      = seat
+
+-- ═══════════════════════════════════════════════════════════════════
+-- SECONDARY LISTING — A ticket listed for secondary sale
+-- ═══════════════════════════════════════════════════════════════════
+template SecondaryListing
+  with
+    ticket    : UserTicket
+    seller    : Party
+    price     : Decimal
+    createdAt : Text
+  where
+    signatory seller, ticket.organizer
+    observer ticket.artist, ticket.public
+
+    -- Buy the ticket from the secondary market
+    -- Canton enforces atomic settlement: royalty is automatically split
+    choice BuySecondary : (ContractId UserTicket, ContractId RoyaltyReceipt)
+      with
+        newOwner : Party
+      controller newOwner
+      do
+        let artistRoyalty = price * (ticket.royaltyPct / 100.0)
+        let sellerShare   = price - artistRoyalty
+
+        -- In production: atomic DVP settlement would happen here:
+        -- 1. newOwner transfers `price` USDC to escrow
+        -- 2. escrow splits: sellerShare -> seller, artistRoyalty -> artist
+        -- 3. ticket ownership transfers to newOwner
+        -- All within a single Canton transaction (atomic)
+
+        -- Create royalty receipt for artist tracking
+        receiptId <- create RoyaltyReceipt with
+          artist       = ticket.artist
+          organizer    = ticket.organizer
+          eventName    = ticket.eventName
+          salePrice    = price
+          royaltyPct   = ticket.royaltyPct
+          royaltyAmount = artistRoyalty
+          sellerShare  = sellerShare
+          seller       = seller
+          buyer        = newOwner
+          ticketSeat   = ticket.seat
+
+        -- Transfer ticket to new owner
+        newTicketId <- create ticket with
+          owner         = newOwner
+          currentPrice  = price
+          transferCount = ticket.transferCount + 1
+
+        return (newTicketId, receiptId)
+
+    -- Cancel / delist the ticket
+    choice CancelListing : ContractId UserTicket
+      controller seller
+      do
+        create ticket
+
+    -- Update listing price
+    choice UpdatePrice : ContractId SecondaryListing
+      with
+        newPrice : Decimal
+      controller seller
+      do
+        assertMsg "Price must be positive" (newPrice > 0.0)
+        create this with price = newPrice
+
+-- ═══════════════════════════════════════════════════════════════════
+-- ROYALTY RECEIPT — Immutable record of royalty payment
+-- ═══════════════════════════════════════════════════════════════════
+template RoyaltyReceipt
+  with
+    artist        : Party
+    organizer     : Party
+    eventName     : Text
+    salePrice     : Decimal
+    royaltyPct    : Decimal
+    royaltyAmount : Decimal
+    sellerShare   : Decimal
+    seller        : Party
+    buyer         : Party
+    ticketSeat    : Text
+  where
+    signatory organizer, seller
+    observer artist
+
+-- ═══════════════════════════════════════════════════════════════════
+-- USED TICKET — Record that a ticket was consumed (event entry)
+-- ═══════════════════════════════════════════════════════════════════
+template UsedTicket
+  with
+    owner     : Party
+    organizer : Party
+    artist    : Party
+    eventName : Text
+    eventDate : Text
+    seat      : Text
+  where
+    signatory organizer, owner
+    observer artist

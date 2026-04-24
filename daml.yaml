@@ -1,0 +1,12 @@
+sdk-version: 2.10.4
+name: canton-ticket
+source: daml
+version: 0.1.0
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
+init-script: Setup:setup
+codegen:
+  js:
+    output-directory: src/daml.js
