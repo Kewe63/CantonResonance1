@@ -53,6 +53,7 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
   // ─── Keycloak Login ────────────────────────────────────────
   const handleKeycloakLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isAuthenticating || isConnecting) return;
     if (!email.trim() || !password.trim()) {
       showToast('⚠️', 'Eksik Bilgi', 'Lütfen e-posta ve şifrenizi girin.', 'error');
       return;
@@ -60,7 +61,6 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
     try {
       setIsAuthenticating(true);
       const partyId = await authService.loginWithKeycloak(email, password);
-      showToast('✅', 'Giriş Başarılı', `Canton Party: ${partyId.slice(0, 16)}...`, 'success');
       onConnect(partyId);
     } catch (err: any) {
       console.error("Login failed:", err);

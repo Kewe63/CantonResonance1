@@ -33,7 +33,6 @@ export const OrganizerPanel = ({ events, onCreateEvent, onCancelEvent, partyId }
           setTimeout(() => reject(new Error('İşlem zaman aşımına uğradı. DevNet yavaş/erişilemez veya yetki gerekiyor.')), 45_000)
         ),
       ]);
-      showToast('✅', 'Etkinlik Oluşturuldu!', `"${form.name}" Canton Ledger'a yazıldı`);
       setShowForm(false);
     } catch (err: any) {
       showToast('❌', 'Hata', err?.message || 'İşlem reddedildi', 'error');

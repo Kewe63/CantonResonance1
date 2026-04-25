@@ -47,7 +47,128 @@ function setState(patch: Partial<CantonState>) {
   notify();
 }
 
+
 // ─── Service ──────────────────────────────────────────────────
+type BuyTicketOutcome = {
+  nextEventContractId?: string;
+  createdTicketContractId?: string;
+  createdEvent?: EventContract;
+  createdTicket?: TicketContract;
+  exerciseResult?: unknown;
+};
+
+function extractChoiceTupleIds(value: any): { eventId?: string; ticketId?: string } {
+  if (!value) return {};
+
+  if (Array.isArray(value)) {
+    const eventId = typeof value[0] === 'string' ? value[0] : undefined;
+    const ticketId = typeof value[1] === 'string' ? value[1] : undefined;
+    return { eventId, ticketId };
+  }
+
+  if (typeof value === 'object') {
+    const objectValue = value as Record<string, unknown>;
+
+    const nestedCandidates = [
+      objectValue.value,
+      objectValue.result,
+      objectValue.exerciseResult,
+      objectValue.choiceResult,
+    ];
+
+    for (const nested of nestedCandidates) {
+      const nestedTuple = extractChoiceTupleIds(nested);
+      if (nestedTuple.eventId || nestedTuple.ticketId) {
+        return nestedTuple;
+      }
+    }
+
+    const eventCandidates = [
+      objectValue.newEventId,
+      objectValue.eventId,
+      objectValue.event_id,
+      objectValue._1,
+      objectValue[0],
+    ];
+    const ticketCandidates = [
+      objectValue.ticketId,
+      objectValue.ticket_id,
+      objectValue.newTicketId,
+      objectValue._2,
+      objectValue[1],
+    ];
+
+    const eventId = eventCandidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0);
+    const ticketId = ticketCandidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0);
+    return { eventId, ticketId };
+  }
+
+  return {};
+}
+
+function extractBuyTicketOutcome(result: any): BuyTicketOutcome {
+  const outcome: BuyTicketOutcome = {};
+
+  const rawExerciseResult = result?.exerciseResult
+    ?? result?.result?.exerciseResult
+    ?? result?.result
+    ?? null;
+  const tupleIds = extractChoiceTupleIds(rawExerciseResult);
+
+  if (tupleIds.eventId) {
+    outcome.nextEventContractId = tupleIds.eventId;
+  }
+
+  if (tupleIds.ticketId) {
+    outcome.createdTicketContractId = tupleIds.ticketId;
+  }
+
+  const allEvents = [
+    ...(Array.isArray(result?.events) ? result.events : []),
+    ...(Array.isArray(result?.result?.events) ? result.result.events : []),
+  ];
+
+  for (const event of allEvents) {
+    const templateId = String(event?.templateId || '').toLowerCase();
+    const contractId = typeof event?.contractId === 'string' ? event.contractId : null;
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : null;
+
+    if (!contractId || !payload) continue;
+
+    if (!outcome.createdEvent && templateId.endsWith(':ticket:event')) {
+      outcome.createdEvent = {
+        contractId,
+        templateId: String(event.templateId),
+        payload,
+        signatories: Array.isArray(event.signatories) ? event.signatories : [],
+        observers: Array.isArray(event.observers) ? event.observers : [],
+      } as EventContract;
+
+      if (!outcome.nextEventContractId) {
+        outcome.nextEventContractId = contractId;
+      }
+      continue;
+    }
+
+    if (!outcome.createdTicket && templateId.endsWith(':ticket:userticket')) {
+      outcome.createdTicket = {
+        contractId,
+        templateId: String(event.templateId),
+        payload,
+        signatories: Array.isArray(event.signatories) ? event.signatories : [],
+        observers: Array.isArray(event.observers) ? event.observers : [],
+      } as TicketContract;
+
+      if (!outcome.createdTicketContractId) {
+        outcome.createdTicketContractId = contractId;
+      }
+    }
+  }
+
+  outcome.exerciseResult = rawExerciseResult;
+  return outcome;
+}
+
 export const cantonService = {
   subscribe(listener: Listener): () => void {
     listeners.add(listener);
@@ -188,12 +309,14 @@ export const cantonService = {
     return ledgerClient.exercise('Event', contractId, 'CancelEvent', {});
   },
 
-  async buyTicket(eventContractId: string, seat: string) {
+  async buyTicket(eventContractId: string, seat: string, eventHint?: EventContract['payload']): Promise<BuyTicketOutcome> {
     if (!ledgerClient || !state.partyId) throw new Error('Not connected');
-    return ledgerClient.exercise('Event', eventContractId, 'BuyTicket', {
+    const result = await ledgerClient.exercise('Event', eventContractId, 'BuyTicket', {
       buyer: state.partyId,
       seat,
+      _eventHint: eventHint || null,
     });
+    return extractBuyTicketOutcome(result);
   },
 
   async listForSale(ticketContractId: string, sellPrice: number) {

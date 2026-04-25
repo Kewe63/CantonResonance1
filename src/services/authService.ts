@@ -30,7 +30,40 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
 
 function normalizePartyId(candidate: unknown): string | null {
   if (typeof candidate !== 'string' || !candidate.trim()) return null;
-  return candidate.trim();
+  const value = candidate.trim();
+  if (value.includes('@')) return null;
+  if (value.includes(' ')) return null;
+  return value;
+}
+
+function extractPartyValues(candidate: unknown): string[] {
+  if (typeof candidate === 'string') {
+    const normalized = normalizePartyId(candidate);
+    return normalized ? [normalized] : [];
+  }
+
+  if (Array.isArray(candidate)) {
+    return [...new Set(candidate.flatMap(extractPartyValues))];
+  }
+
+  if (candidate && typeof candidate === 'object') {
+    const c = candidate as Record<string, unknown>;
+    const nestedCandidates = [
+      c.actAs,
+      c.readAs,
+      c.party,
+      c.party_id,
+      c.primaryParty,
+      c.identifier,
+      c.value,
+      c.values,
+      c.partyId,
+      c.partyID,
+    ];
+    return [...new Set(nestedCandidates.flatMap(extractPartyValues))];
+  }
+
+  return [];
 }
 
 export const authService = {
@@ -38,6 +71,11 @@ export const authService = {
   activeToken: null as string | null,
   activePartyId: null as string | null,
   activeMode: 'sandbox' as AuthMode,
+  knownDevnetPartyMap: {
+    kewe63: '1cd9051f-46da-4cc0-88df-f0c2cb475c87::1220195a56748e538153ecc527422256c235ff27b367483b04e161d3bbc62b1ebf32',
+    '1cd9051f-46da-4cc0-88df-f0c2cb475c87': '1cd9051f-46da-4cc0-88df-f0c2cb475c87::1220195a56748e538153ecc527422256c235ff27b367483b04e161d3bbc62b1ebf32',
+    '1cd9051f-46da-4cc0-88df-f0c2cb475c87::1220195a56748e538153ecc527422256c235ff27b367483b04e161d3bbc62b1ebf32': 'kewe63',
+  } as Record<string, string>,
 
   /**
    * Generate an unsigned sandbox JWT token.
@@ -142,7 +180,11 @@ export const authService = {
 
     if (!res.ok) {
       const errTxt = await res.text();
-      throw new Error(`Keycloak Login Failed: ${res.statusText} - ${errTxt}`);
+      const normalized = errTxt.toLowerCase();
+      if (normalized.includes('invalid_grant') || normalized.includes('invalid user credentials')) {
+        throw new Error('Keycloak Login Failed: Kullanıcı adı/e-posta veya şifre hatalı (invalid_grant).');
+      }
+      throw new Error(`Keycloak Login Failed: ${res.status || res.statusText} - ${errTxt}`);
     }
 
     const data = await res.json();
@@ -150,34 +192,37 @@ export const authService = {
     this.activeToken = token;
     this.activeMode = 'devnet';
 
-    // 1) Primary source: token actAs claim
+    // 1) Primary source: token claims (array/string/nested)
     const payload = decodeJwtPayload(token);
-    const claimActAs = payload?.['https://daml.com/ledger-api']?.actAs;
-    if (Array.isArray(claimActAs) && claimActAs.length > 0) {
-      const partyFromClaim = normalizePartyId(claimActAs[0]);
-      if (partyFromClaim) {
-        this.activePartyId = partyFromClaim;
-        return partyFromClaim;
-      }
-    }
-
-    // 2) Secondary source: legacy fields if they already carry full party ID
-    const directCandidates = [
+    const partyCandidatesRaw = [
+      payload?.['https://daml.com/ledger-api']?.actAs,
+      payload?.actAs,
       payload?.party,
       payload?.party_id,
       payload?.primaryParty,
-      payload?.preferred_username,
-      payload?.sub,
-    ];
-    for (const candidate of directCandidates) {
-      const normalized = normalizePartyId(candidate);
-      if (normalized) {
-        this.activePartyId = normalized;
-        return normalized;
-      }
+      payload?.['https://daml.com/ledger-api'],
+    ].flatMap(extractPartyValues);
+
+    const partyCandidates = [...new Set(partyCandidatesRaw.flatMap((party) => {
+      const alias = this.knownDevnetPartyMap[party];
+      if (alias && alias !== party) return [party, alias];
+      return [party];
+    }))];
+
+    if (partyCandidates.length > 0) {
+      this.activePartyId = partyCandidates[0];
+      return partyCandidates[0];
     }
 
-    throw new Error('DevNet token içinde geçerli party ID (actAs) bulunamadı.');
+    // Do not block login if token omits explicit party claims.
+    // Server-side bridge will still enforce authorization on command submit.
+    const fallbackUserIdRaw = normalizePartyId(payload?.preferred_username)
+      || normalizePartyId(payload?.sub)
+      || email;
+
+    const fallbackUserId = this.knownDevnetPartyMap[fallbackUserIdRaw] || fallbackUserIdRaw;
+    this.activePartyId = fallbackUserId;
+    return fallbackUserId;
   },
 
   /**

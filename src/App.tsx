@@ -38,6 +38,17 @@ const ROLE_META: Record<Role, { label: string; icon: string }> = {
   artist: { label: 'SANATÇI', icon: 'bxs-music' },
 };
 
+function matchesEventHintPayload(payload: EventContract['payload'], eventHint: EventContract['payload']): boolean {
+  const nameMatches = payload.name === eventHint.name;
+  const dateMatches = payload.date === eventHint.date;
+  const venueMatches = payload.venue === eventHint.venue;
+  const organizerMatches = String(payload.organizer || '') === String(eventHint.organizer || '');
+
+  if (nameMatches && dateMatches && venueMatches && organizerMatches) return true;
+  const strongMatchCount = [nameMatches, dateMatches, venueMatches].filter(Boolean).length;
+  return strongMatchCount >= 2;
+}
+
 // ─── Inner App (needs Toast context) ──────────────────────────
 
 function AppInner() {
@@ -55,6 +66,9 @@ function AppInner() {
   const [receipts, setReceipts] = useState<RoyaltyContract[]>([]);
 
   const streamCleanup = useRef<(() => void) | null>(null);
+  const stickyCreatedEventsRef = useRef<Map<string, EventContract>>(new Map());
+  const connectInFlightRef = useRef(false);
+  const createInFlightRef = useRef(false);
   const { showToast } = useToast();
 
   // ─── Theme ─────────────────────────────────────────────────
@@ -73,6 +87,38 @@ function AppInner() {
     return unsub;
   }, []);
 
+  const mergeWithStickyEvents = useCallback((incomingEvents: EventContract[]) => {
+    const stickyMap = stickyCreatedEventsRef.current;
+
+    const realIncomingEvents = incomingEvents.filter((event) => !String(event.contractId).startsWith('unparsed-'));
+    const incomingIds = new Set(realIncomingEvents.map((event) => event.contractId));
+
+    const sameEventIdentity = (left: EventContract['payload'], right: EventContract['payload']) => (
+      left.name === right.name
+      && left.date === right.date
+      && left.venue === right.venue
+      && String(left.organizer || '') === String(right.organizer || '')
+    );
+
+    for (const [stickyId, stickyEvent] of stickyMap.entries()) {
+      if (!stickyEvent?.payload) {
+        stickyMap.delete(stickyId);
+        continue;
+      }
+
+      const resolvedByExactContractId = incomingIds.has(stickyEvent.contractId);
+      const resolvedByIdentity = realIncomingEvents.some((event) => sameEventIdentity(stickyEvent.payload, event.payload));
+
+      if (resolvedByExactContractId || resolvedByIdentity) {
+        stickyMap.delete(stickyId);
+      }
+    }
+
+    const stickyValues = Array.from(stickyMap.values()) as EventContract[];
+    const stickyOnly = stickyValues.filter((event) => !incomingIds.has(event.contractId));
+
+    return [...realIncomingEvents, ...stickyOnly];
+  }, []);
   // ─── Data fetching ─────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     try {
@@ -82,14 +128,16 @@ function AppInner() {
         cantonService.getListings(),
         cantonService.getRoyaltyReceipts(),
       ]);
-      setEvents(ev);
+
+      const mergedEvents = mergeWithStickyEvents(ev);
+      setEvents(mergedEvents);
       setTickets(tk);
       setListings(ls);
       setReceipts(rc);
     } catch (err) {
       console.warn('Fetch failed, using offline state', err);
     }
-  }, []);
+  }, [mergeWithStickyEvents]);
 
   // Fetch on connect
   useEffect(() => {
@@ -97,7 +145,7 @@ function AppInner() {
       fetchAll();
       // Start streaming
       streamCleanup.current = cantonService.streamAll((data) => {
-        setEvents(data.events);
+        setEvents(mergeWithStickyEvents(data.events));
         setTickets(data.tickets);
         setListings(data.listings);
         setReceipts(data.receipts);
@@ -107,21 +155,29 @@ function AppInner() {
       streamCleanup.current?.();
       streamCleanup.current = null;
     };
-  }, [connStatus, fetchAll]);
+  }, [connStatus, fetchAll, mergeWithStickyEvents]);
 
   // ─── Handlers ──────────────────────────────────────────────
   const handleConnect = async (uid: string) => {
-    const ok = await cantonService.connect(uid);
-    if (ok) {
-      showToast('⚡', 'Bağlantı Kuruldu', `Canton Ledger'a ${uid} olarak bağlandınız`);
-    } else {
-      const s = cantonService.getState();
-      showToast('❌', 'Bağlantı Hatası', s.error || 'Bilinmeyen hata', 'error');
+    if (connectInFlightRef.current) return;
+    connectInFlightRef.current = true;
+
+    try {
+      const ok = await cantonService.connect(uid);
+      if (ok) {
+        showToast('⚡', 'Bağlantı Kuruldu', `Canton Ledger'a ${uid} olarak bağlandınız`);
+      } else {
+        const s = cantonService.getState();
+        showToast('❌', 'Bağlantı Hatası', s.error || 'Bilinmeyen hata', 'error');
+      }
+    } finally {
+      connectInFlightRef.current = false;
     }
   };
 
   const handleDisconnect = () => {
     cantonService.disconnect();
+    stickyCreatedEventsRef.current.clear();
     setEvents([]);
     setTickets([]);
     setListings([]);
@@ -135,13 +191,30 @@ function AppInner() {
     totalTickets: number; price: number; royaltyPct: number;
     maxResaleMultiplier: number | null;
   }) => {
-    await cantonService.createEvent({
-      ...payload,
-      artist: 'ArtistParty',
-      public: 'Public',
-    });
-    showToast('🎉', 'Etkinlik Oluşturuldu!', `"${payload.name}" Canton'a deploy edildi`);
-    await fetchAll();
+    if (createInFlightRef.current) return;
+    createInFlightRef.current = true;
+
+    try {
+      const created = await cantonService.createEvent({
+        ...payload,
+        artist: 'ArtistParty',
+        public: 'Public',
+      });
+
+      if (created && typeof created === 'object' && 'contractId' in created && 'payload' in created) {
+        const createdEvent = created as EventContract;
+        stickyCreatedEventsRef.current.set(createdEvent.contractId, createdEvent);
+        setEvents((prev) => [
+          createdEvent,
+          ...prev.filter((event) => event.contractId !== createdEvent.contractId),
+        ]);
+      }
+
+      showToast('🎉', 'Etkinlik Oluşturuldu!', `"${payload.name}" Canton'a deploy edildi`);
+      await fetchAll();
+    } finally {
+      createInFlightRef.current = false;
+    }
   };
 
   const handleCancelEvent = async (cid: string) => {
@@ -150,9 +223,193 @@ function AppInner() {
     await fetchAll();
   };
 
-  const handleBuyTicket = async (eventCid: string, seat: string) => {
-    await cantonService.buyTicket(eventCid, seat);
+  const handleBuyTicket = async (eventCid: string, seat: string, eventHint?: EventContract['payload']) => {
+    const buyById = async (cid: string) => cantonService.buyTicket(cid, seat, eventHint);
+
+    let usedEventCid = eventCid;
+    let createdTicketContractId: string | null = null;
+    let bridgeCreatedEvent: EventContract | null = null;
+    let bridgeCreatedTicket: TicketContract | null = null;
+
+    const applyBuyOutcome = (outcome: Awaited<ReturnType<typeof cantonService.buyTicket>> | null | undefined) => {
+      if (!outcome) return;
+
+      if (outcome.nextEventContractId) {
+        usedEventCid = outcome.nextEventContractId;
+      }
+
+      if (outcome.createdTicketContractId) {
+        createdTicketContractId = outcome.createdTicketContractId;
+      }
+
+      if (outcome.createdEvent) {
+        bridgeCreatedEvent = outcome.createdEvent;
+        usedEventCid = outcome.createdEvent.contractId;
+      }
+
+      if (outcome.createdTicket) {
+        bridgeCreatedTicket = outcome.createdTicket;
+        createdTicketContractId = outcome.createdTicket.contractId;
+      }
+    };
+
+    try {
+      applyBuyOutcome(await buyById(eventCid));
+    } catch (err: any) {
+      const rawMessage = String(err?.message || err || '');
+      const missingContract = rawMessage.toLowerCase().includes('contract could not be found with id');
+
+      const latestEvents = await cantonService.getEvents();
+      const freshByHint = eventHint
+        ? latestEvents.find((event) => matchesEventHintPayload(event.payload, eventHint))
+        : undefined;
+
+      if (!freshByHint) {
+        if (!String(eventCid).startsWith('unparsed-') && !missingContract) throw err;
+      } else {
+        usedEventCid = freshByHint.contractId;
+
+        setEvents((prev) => {
+          const withoutOld = prev.filter((event) => event.contractId !== eventCid && event.contractId !== freshByHint.contractId);
+          return [freshByHint, ...withoutOld];
+        });
+
+        try {
+          applyBuyOutcome(await buyById(freshByHint.contractId));
+        } catch (retryErr) {
+          const retryMessage = String((retryErr as any)?.message || retryErr || '').toLowerCase();
+          if (!retryMessage.includes('contract could not be found with id')) throw retryErr;
+
+          let finalRetryError = retryErr;
+          for (const retryDelay of [1200, 2200, 3000]) {
+            await new Promise((resolve) => setTimeout(resolve, retryDelay));
+            const refreshed = await cantonService.getEvents();
+            const newest = eventHint
+              ? refreshed.find((event) => matchesEventHintPayload(event.payload, eventHint))
+              : undefined;
+            if (!newest) continue;
+
+            try {
+              usedEventCid = newest.contractId;
+              applyBuyOutcome(await buyById(newest.contractId));
+              finalRetryError = null;
+              break;
+            } catch (loopErr) {
+              finalRetryError = loopErr;
+            }
+          }
+
+          if (finalRetryError) throw finalRetryError;
+        }
+      }
+    }
+
+    if (bridgeCreatedEvent) {
+      const createdEvent = bridgeCreatedEvent;
+      stickyCreatedEventsRef.current.set(createdEvent.contractId, createdEvent);
+      setEvents((prev) => mergeWithStickyEvents([
+        createdEvent,
+        ...prev.filter((event) => event.contractId !== eventCid && event.contractId !== createdEvent.contractId),
+      ]));
+    }
+
+    if (bridgeCreatedTicket) {
+      const createdTicket = bridgeCreatedTicket;
+      setTickets((prev) => [
+        createdTicket,
+        ...prev.filter((ticket) => ticket.contractId !== createdTicket.contractId),
+      ]);
+    } else if (createdTicketContractId && eventHint) {
+      const syntheticTicket: TicketContract = {
+        contractId: createdTicketContractId,
+        templateId: '',
+        payload: {
+          owner: partyId || '',
+          organizer: String(eventHint.organizer || ''),
+          artist: String(eventHint.artist || ''),
+          public: String(eventHint.public || ''),
+          eventName: eventHint.name,
+          eventDate: eventHint.date,
+          eventVenue: eventHint.venue,
+          seat,
+          originalPrice: String(eventHint.price),
+          currentPrice: String(eventHint.price),
+          royaltyPct: String(eventHint.royaltyPct),
+          maxResaleMultiplier: eventHint.maxResaleMultiplier === null ? null : String(eventHint.maxResaleMultiplier),
+          isUsed: false,
+          transferCount: 0,
+        },
+        signatories: [],
+        observers: [],
+      };
+
+      bridgeCreatedTicket = syntheticTicket;
+      setTickets((prev) => [
+        syntheticTicket,
+        ...prev.filter((ticket) => ticket.contractId !== syntheticTicket.contractId),
+      ]);
+    }
+
+    if (bridgeCreatedEvent && bridgeCreatedTicket) {
+      window.setTimeout(() => {
+        fetchAll().catch(() => undefined);
+      }, 1500);
+      return;
+    }
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const [latestEvents, latestTickets] = await Promise.all([
+        cantonService.getEvents(),
+        cantonService.getTickets(),
+      ]);
+
+      const refreshedEvent = latestEvents.find((event) => event.contractId === usedEventCid)
+        || (eventHint ? latestEvents.find((event) => matchesEventHintPayload(event.payload, eventHint)) : undefined);
+
+      if (refreshedEvent) {
+        usedEventCid = refreshedEvent.contractId;
+      }
+
+      setEvents(mergeWithStickyEvents(latestEvents));
+
+      const mergedTickets = bridgeCreatedTicket
+        ? [
+            bridgeCreatedTicket,
+            ...latestTickets.filter((ticket) => ticket.contractId !== bridgeCreatedTicket!.contractId),
+          ]
+        : latestTickets;
+      setTickets(mergedTickets);
+
+      const boughtVisibleByContractId = createdTicketContractId
+        ? mergedTickets.some((ticket) => ticket.contractId === createdTicketContractId)
+        : false;
+
+      const boughtVisibleBySeat = mergedTickets.some((ticket) => {
+        const sameSeat = ticket.payload.seat === seat;
+        const sameEvent = eventHint ? ticket.payload.eventName === eventHint.name : true;
+        return sameSeat && sameEvent;
+      });
+
+      const boughtVisible = boughtVisibleByContractId || boughtVisibleBySeat;
+
+      const counterAdvanced = refreshedEvent
+        ? (eventHint
+          ? Number(refreshedEvent.payload.ticketsSold) > Number(eventHint.ticketsSold)
+          : true)
+        : false;
+
+      if (boughtVisible && (counterAdvanced || !!bridgeCreatedEvent)) {
+        window.setTimeout(() => {
+          fetchAll().catch(() => undefined);
+        }, 1200);
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    }
+
     await fetchAll();
+    throw new Error('İşlem ledger üzerinde henüz doğrulanmadı. Bilet cüzdana düşmediyse birkaç saniye sonra tekrar deneyin.');
   };
 
   const handleListForSale = async (ticketCid: string, price: number) => {

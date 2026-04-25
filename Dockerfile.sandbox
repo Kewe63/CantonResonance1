@@ -21,7 +21,7 @@ RUN daml build
 
 # Copy entrypoint script
 COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
 # Expose ports
 EXPOSE 6865 7575

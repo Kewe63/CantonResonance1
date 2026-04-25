@@ -65,7 +65,7 @@ export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
 
   const totalSecondarySales = receipts.length;
   const totalRoyalty = receipts.reduce((sum, r) => sum + parseFloat(r.payload.royaltyAmount || '0'), 0);
-  const totalTicketsSold = events.reduce((sum, e) => sum + (e.payload.ticketsSold || 0), 0);
+  const totalTicketsSold = events.reduce((sum, e) => sum + Number(e.payload.ticketsSold || 0), 0);
 
   const typeColors: Record<string, string> = {
     primary: 'text-text-main',

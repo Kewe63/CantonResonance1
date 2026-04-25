@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from './Toast';
 import type { EventContract, TicketContract, ListingContract } from '../services/damlLedger';
@@ -8,7 +8,7 @@ interface Props {
   tickets: TicketContract[];
   listings: ListingContract[];
   partyId: string;
-  onBuyTicket: (eventCid: string, seat: string) => Promise<void>;
+  onBuyTicket: (eventCid: string, seat: string, eventHint?: EventContract['payload']) => Promise<void>;
   onListForSale: (ticketCid: string, price: number) => Promise<void>;
   onBuySecondary: (listingCid: string) => Promise<void>;
   onCancelListing: (listingCid: string) => Promise<void>;
@@ -23,17 +23,29 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
 
   const selectedEvent = events.find(e => e.contractId === selectedEventCid);
 
-  const handleBuy = async () => {
+  useEffect(() => {
     if (!selectedEventCid) return;
+    if (events.some((event) => event.contractId === selectedEventCid)) return;
+
+    const replacement = events.find((event) => !event.payload.isCancelled);
+    if (replacement) {
+      setSelectedEventCid(replacement.contractId);
+    } else {
+      setSelectedEventCid(null);
+    }
+  }, [events, selectedEventCid]);
+
+  const handleBuy = async (event: EventContract) => {
     setBuying(true);
     try {
       const seat = 'Koltuk ' + (Math.floor(Math.random()*200)+1);
-      await onBuyTicket(selectedEventCid, seat);
+      await onBuyTicket(event.contractId, seat, event.payload);
       showToast('🎫', 'Bilet Satın Alındı!', `Primary Sale — Canton üzerinden transfer gerçekleşti`);
     } catch (err: any) {
       showToast('❌', 'Hata', err?.message || 'Bilet alınamadı', 'error');
+    } finally {
+      setBuying(false);
     }
-    setBuying(false);
   };
 
   const handleList = async () => {
@@ -67,8 +79,8 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
       {/* Events Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {events.filter(e=>!e.payload.isCancelled).map(event => {
-          const sold = parseInt(event.payload.ticketsSold||'0');
-          const total = parseInt(event.payload.totalTickets||'0');
+          const sold = parseInt(String(event.payload.ticketsSold ?? '0'));
+          const total = parseInt(String(event.payload.totalTickets ?? '0'));
           const available = total - sold > 0;
           const isSelected = selectedEventCid === event.contractId;
           return (
@@ -91,7 +103,7 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
                 <p className="text-[10px] text-text-muted uppercase tracking-wider">{event.payload.venue} — {event.payload.date}</p>
                 <p className="text-[10px] text-accent-purple mt-1 font-mono">%{event.payload.royaltyPct} royalty → sanatçıya</p>
                 {isSelected && available && (
-                  <button onClick={(e)=>{e.stopPropagation();handleBuy()}} disabled={buying}
+                  <button onClick={(e)=>{e.stopPropagation();handleBuy(event)}} disabled={buying}
                     className="w-full mt-3 py-2.5 rounded-xl text-xs font-bold bg-text-main text-bg hover:bg-accent hover:text-black active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                     {buying ? <><div className="w-3 h-3 border-2 border-bg border-t-transparent rounded-full animate-spin"/>Satın Alınıyor...</> : <>🎫 Satın Al</>}
                   </button>

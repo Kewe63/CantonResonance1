@@ -80,6 +80,7 @@ export type RoyaltyContract = LedgerContract<RoyaltyReceiptPayload>;
 const MODULE_NAME = 'Ticket';
 
 const KNOWN_FALLBACK_PACKAGE_IDS = [
+  '3be69cf15cf50061b020cc7cd9b7cbadb2b7247f5a58c370b39cb0d6800d290a',
   'a398ea626d8d5df5db30bab757ef1ce24b8e001428df390c6fc6fdc4980e68b0',
 ];
 
@@ -133,7 +134,8 @@ function getApiPaths(mode: 'sandbox' | 'devnet') {
   return {
     query: mode === 'sandbox' ? '/api/canton/query' : '/bridge/query',
     create: mode === 'sandbox' ? '/api/canton/create' : '/bridge/create',
-    exercise: mode === 'sandbox' ? '/api/canton/exercise' : '/bridge/exercise'
+    exercise: mode === 'sandbox' ? '/api/canton/exercise' : '/bridge/exercise',
+    buyTicket: mode === 'sandbox' ? '/api/canton/exercise' : '/bridge/buy-ticket',
   };
 }
 
@@ -243,47 +245,20 @@ export async function createLedgerClient(partyId: string) {
     const allCandidates = buildPackageIdCandidates(packageId, devnetPackageCandidates);
     const candidatePids = allCandidates.slice(0, MAX_DEVNET_PACKAGE_CANDIDATES);
 
-    devnetTemplateUnavailable = false;
+    devnetTemplateUnavailable = candidatePids.length === 0;
 
-    for (const candidatePid of candidatePids) {
-      const candidateTemplateId = formatTemplateId(templateName, candidatePid);
-      const res = await fetchWithTimeout(apiPaths.query, {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({
-          templateIds: [candidateTemplateId],
-          query: {},
-        }),
-      }, 10_000);
-
-      const data = await res.json().catch(() => ({}));
-      const msg = parseErrorMessage(data, res.statusText);
-
-      if (res.ok && !data?.errors) {
-        if (candidatePid !== packageId) {
-          console.log(`[LEDGER] Switched DevNet package ID -> ${candidatePid}`);
-        }
-        packageId = candidatePid;
-        packageResolutionCache.set(templateName, {
-          packageId: candidatePid,
-          expiresAt: Date.now() + PACKAGE_RESOLUTION_TTL_MS,
-        });
-        return packageId;
-      }
-
-      if (res.status === 401 || isSecuritySensitiveError(msg)) {
-        continue;
-      }
-
-      if (isTemplateMissingError(msg)) {
-        continue;
-      }
-
-      throw new Error(`Package resolution failed: ${msg}`);
+    if (candidatePids.length > 0) {
+      packageId = candidatePids[0];
+      packageResolutionCache.set(templateName, {
+        packageId,
+        expiresAt: Date.now() + PACKAGE_RESOLUTION_TTL_MS,
+      });
     }
 
-    devnetTemplateUnavailable = true;
-    console.warn(`[LEDGER] No readable package found for ${MODULE_NAME}:${templateName}; server-side create fallback will try package candidates.`);
+    if (devnetTemplateUnavailable) {
+      console.warn(`[LEDGER] No package candidates visible for ${MODULE_NAME}:${templateName}; command flow will rely on server-side package fallback.`);
+    }
+
     return packageId;
   };
 
@@ -386,6 +361,33 @@ export async function createLedgerClient(partyId: string) {
     async exercise<T = any>(templateId: string, contractId: string, choice: string, argument: any): Promise<T> {
       if (mode === 'devnet') {
         await resolveWorkingPackageId(templateId);
+
+        if (choice === 'BuyTicket') {
+          const seat = typeof argument?.seat === 'string' ? argument.seat : '';
+          const eventHint = argument?._eventHint && typeof argument._eventHint === 'object' ? argument._eventHint : null;
+          const buyer = typeof argument?.buyer === 'string' ? argument.buyer : partyId;
+
+          if (seat && eventHint) {
+            const buyRes = await fetchWithTimeout(apiPaths.buyTicket, {
+              method: 'POST',
+              headers: headers(),
+              body: JSON.stringify({
+                templateId: formatTemplateId(templateId),
+                contractId,
+                buyer,
+                seat,
+                eventHint,
+              }),
+            }, 18_000);
+
+            const buyData = await buyRes.json().catch(() => ({}));
+            if (!buyRes.ok) {
+              throw new Error(`Exercise Failed: ${parseErrorMessage(buyData, buyRes.statusText)}`);
+            }
+            if (buyData.errors) throw new Error(buyData.errors.join(', '));
+            return buyData.result;
+          }
+        }
       }
 
       const res = await fetchWithTimeout(apiPaths.exercise, {
@@ -425,6 +427,8 @@ class LedgerManager {
 }
 
 export const ledgerManager = new LedgerManager();
-// @ts-ignore - Debug: Force clear on every HMR load
-window.ledgerManager = ledgerManager;
-ledgerManager.clearAll();
+if (typeof window !== 'undefined') {
+  // @ts-ignore - Debug: Force clear on every HMR load
+  window.ledgerManager = ledgerManager;
+  ledgerManager.clearAll();
+}
