@@ -413,20 +413,6 @@ For bugs or feature requests, use [GitHub Issues](https://github.com/Kewe63/Cant
 
 ---
 
-## 📄 License
-
-This project does not currently specify a license. Please contact the repository owner before use.
-
----
-
-## 📬 Contact / Support
-
-- **GitHub:** [@Kewe63](https://github.com/Kewe63)
-- **Issues:** [GitHub Issues](https://github.com/Kewe63/CantonResonance1/issues)
-- **Canton Developer Community:** [discuss.daml.com](https://discuss.daml.com)
-
----
-
 ## 🗺 Roadmap
 
 - [ ] User authentication UI (DevNet JWT login flow)
@@ -457,9 +443,25 @@ This project does not currently specify a license. Please contact the repository
 
 - [Digital Asset / Daml](https://daml.com) — Smart contract infrastructure
 - [Canton Network](https://canton.io) — Distributed ledger protocol
-- [Google AI Studio](https://aistudio.google.com) — Repository template & Gemini integration (`@google/genai`)
 - [Vite](https://vitejs.dev) — Fast development server
 - [Tailwind CSS](https://tailwindcss.com) — Styling framework
 - [Motion](https://motion.dev) — Animation library
 - [Lucide React](https://lucide.dev) — Icon set
 - [Ethers.js](https://docs.ethers.org) — Ethereum connectivity
+
+---
+
+## 📬 Contact / Support
+
+- **GitHub:** [@Kewe63](https://github.com/Kewe63)
+- **Issues:** [GitHub Issues](https://github.com/Kewe63/CantonResonance1/issues)
+- **Canton Developer Community:** [discuss.daml.com](https://discuss.daml.com)
+
+--- 
+
+## 📄 License
+
+This project does not currently specify a license. Please contact the repository owner before use.
+
+---
+
