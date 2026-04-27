@@ -129,19 +129,20 @@ function extractBuyTicketOutcome(result: any): BuyTicketOutcome {
   ];
 
   for (const event of allEvents) {
-    const templateId = String(event?.templateId || '').toLowerCase();
-    const contractId = typeof event?.contractId === 'string' ? event.contractId : null;
-    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : null;
+    const unwrappedEvent = event?.created ? event.created : event;
+    const templateId = String(unwrappedEvent?.templateId || '').toLowerCase();
+    const contractId = typeof unwrappedEvent?.contractId === 'string' ? unwrappedEvent.contractId : null;
+    const payload = unwrappedEvent?.payload && typeof unwrappedEvent.payload === 'object' ? unwrappedEvent.payload : null;
 
     if (!contractId || !payload) continue;
 
     if (!outcome.createdEvent && templateId.endsWith(':ticket:event')) {
       outcome.createdEvent = {
         contractId,
-        templateId: String(event.templateId),
+        templateId: String(unwrappedEvent.templateId),
         payload,
-        signatories: Array.isArray(event.signatories) ? event.signatories : [],
-        observers: Array.isArray(event.observers) ? event.observers : [],
+        signatories: Array.isArray(unwrappedEvent.signatories) ? unwrappedEvent.signatories : [],
+        observers: Array.isArray(unwrappedEvent.observers) ? unwrappedEvent.observers : [],
       } as EventContract;
 
       if (!outcome.nextEventContractId) {
@@ -153,10 +154,10 @@ function extractBuyTicketOutcome(result: any): BuyTicketOutcome {
     if (!outcome.createdTicket && templateId.endsWith(':ticket:userticket')) {
       outcome.createdTicket = {
         contractId,
-        templateId: String(event.templateId),
+        templateId: String(unwrappedEvent.templateId),
         payload,
-        signatories: Array.isArray(event.signatories) ? event.signatories : [],
-        observers: Array.isArray(event.observers) ? event.observers : [],
+        signatories: Array.isArray(unwrappedEvent.signatories) ? unwrappedEvent.signatories : [],
+        observers: Array.isArray(unwrappedEvent.observers) ? unwrappedEvent.observers : [],
       } as TicketContract;
 
       if (!outcome.createdTicketContractId) {

@@ -390,6 +390,12 @@ export async function createLedgerClient(partyId: string) {
         }
       }
 
+      // Strip _eventHint for sandbox (or any standard API path) because it's a frontend-only hint
+      const cleanArgument = { ...argument };
+      if ('_eventHint' in cleanArgument) {
+        delete cleanArgument._eventHint;
+      }
+
       const res = await fetchWithTimeout(apiPaths.exercise, {
         method: 'POST',
         headers: headers(),
@@ -397,7 +403,7 @@ export async function createLedgerClient(partyId: string) {
           templateId: formatTemplateId(templateId),
           contractId,
           choice,
-          argument,
+          argument: cleanArgument,
         }),
       }, 12_000);
       const data = await res.json();
