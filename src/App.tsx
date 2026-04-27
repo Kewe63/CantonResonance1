@@ -27,15 +27,16 @@ import { OrganizerPanel } from './components/OrganizerPanel';
 import { UserPanel } from './components/UserPanel';
 import { ArtistPanel } from './components/ArtistPanel';
 import { LedgerFeed } from './components/LedgerFeed';
+import { useI18n } from './i18n';
 
 // ─── Types ────────────────────────────────────────────────────
 
 type Role = 'organizer' | 'user' | 'artist';
 
-const ROLE_META: Record<Role, { label: string; icon: string }> = {
-  organizer: { label: 'ORGANİZATÖR', icon: 'bxs-badge-check' },
-  user: { label: 'KULLANICI', icon: 'bxs-user' },
-  artist: { label: 'SANATÇI', icon: 'bxs-music' },
+const ROLE_ICONS: Record<Role, string> = {
+  organizer: 'bxs-badge-check',
+  user: 'bxs-user',
+  artist: 'bxs-music',
 };
 
 function matchesEventHintPayload(payload: EventContract['payload'], eventHint: EventContract['payload']): boolean {
@@ -70,6 +71,13 @@ function AppInner() {
   const connectInFlightRef = useRef(false);
   const createInFlightRef = useRef(false);
   const { showToast } = useToast();
+  const { t, lang, setLang } = useI18n();
+
+  const ROLE_META: Record<Role, { label: string; icon: string }> = {
+    organizer: { label: t('role.organizer'), icon: ROLE_ICONS.organizer },
+    user: { label: t('role.user'), icon: ROLE_ICONS.user },
+    artist: { label: t('role.artist'), icon: ROLE_ICONS.artist },
+  };
 
   // ─── Theme ─────────────────────────────────────────────────
   useEffect(() => {
@@ -234,7 +242,7 @@ function AppInner() {
         ]);
       }
 
-      showToast('🎉', 'Etkinlik Oluşturuldu!', `"${payload.name}" Canton'a deploy edildi`);
+      showToast('🎉', t('toast.eventCreated'), `"${payload.name}" ${t('toast.eventCreatedDetail')}`);
       await fetchAll();
     } finally {
       createInFlightRef.current = false;
@@ -244,7 +252,7 @@ function AppInner() {
   const handleCancelEvent = async (cid: string) => {
     await cantonService.cancelEvent(cid);
     addArchivedContract(cid);
-    showToast('🗑️', 'Etkinlik İptal Edildi', 'Event kontratı iptal edildi');
+    showToast('🗑️', t('toast.eventCancelled'), t('toast.eventCancelledDetail'));
     await fetchAll();
   };
 
@@ -463,7 +471,7 @@ function AppInner() {
   const handleUseTicket = async (ticketCid: string) => {
     await cantonService.useTicket(ticketCid);
     addArchivedContract(ticketCid);
-    showToast('✅', 'Bilet Kullanıldı', 'Etkinliğe giriş kaydedildi');
+    showToast('✅', t('toast.ticketUsed'), t('toast.ticketUsedDetail'));
     await fetchAll();
   };
 
@@ -480,7 +488,7 @@ function AppInner() {
           <div className="flex gap-3">
             <i className='bx bx-error-circle text-red-500 text-xl shrink-0'></i>
             <div>
-              <p className="text-xs font-bold text-red-500 uppercase tracking-widest">Bağlantı Gerekli</p>
+              <p className="text-xs font-bold text-red-500 uppercase tracking-widest">{t('nav.connectionRequired')}</p>
               <p className="text-[10px] text-text-muted mt-1 leading-relaxed">{connError}</p>
             </div>
           </div>
@@ -534,6 +542,14 @@ function AppInner() {
 
           {/* Right: Theme + Wallet */}
           <div className="hidden md:flex items-center gap-3">
+            {/* Language Toggle */}
+            <button
+              onClick={() => setLang(lang === 'tr' ? 'en' : 'tr')}
+              className="w-10 h-10 flex items-center justify-center bg-surface hover:bg-surface-hover border border-border rounded-xl text-text-main transition-colors text-xs font-bold"
+              title={lang === 'tr' ? 'Switch to English' : 'Türkçeye Geç'}
+            >
+              {lang === 'tr' ? 'EN' : 'TR'}
+            </button>
             <button
               onClick={() => setIsDark(!isDark)}
               className="w-10 h-10 flex items-center justify-center bg-surface hover:bg-surface-hover border border-border rounded-xl text-text-main transition-colors"
@@ -543,13 +559,13 @@ function AppInner() {
             {isLoggedIn ? (
               <div className="flex items-center gap-3 pl-3 border-l border-border">
                 <div className="text-right">
-                  <p className="text-[8px] font-bold text-text-muted uppercase tracking-widest">Aktif Kimlik</p>
-                  <p className="text-xs font-mono font-bold text-accent truncate max-w-[140px]">{partyId || 'Bağlanıyor...'}</p>
+                  <p className="text-[8px] font-bold text-text-muted uppercase tracking-widest">{t('nav.activeIdentity')}</p>
+                  <p className="text-xs font-mono font-bold text-accent truncate max-w-[140px]">{partyId || t('nav.connecting')}</p>
                 </div>
                 <button
                   onClick={handleDisconnect}
                   className="w-8 h-8 flex items-center justify-center bg-surface-hover hover:bg-bg border border-border rounded-lg text-red-500 transition-colors"
-                  title="Bağlantıyı Kes"
+                  title={t('nav.disconnect')}
                 >
                   <i className='bx bx-log-out text-base'></i>
                 </button>
@@ -557,7 +573,7 @@ function AppInner() {
             ) : (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-lg">
                 <div className="w-2 h-2 bg-text-muted rounded-full" />
-                <span className="text-[10px] font-mono font-bold text-text-muted uppercase tracking-tight">Bağlantı Yok</span>
+                <span className="text-[10px] font-mono font-bold text-text-muted uppercase tracking-tight">{t('nav.noConnection')}</span>
               </div>
             )}
           </div>

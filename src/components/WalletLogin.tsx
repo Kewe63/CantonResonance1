@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { useToast } from './Toast';
 import { authService } from '../services/authService';
 import { cantonService } from '../services/cantonService';
+import { useI18n } from '../i18n';
 
 interface Props {
   onConnect: (userId: string) => void;
@@ -16,13 +17,6 @@ interface Props {
 
 type LoginMode = 'sandbox' | 'devnet';
 
-const SANDBOX_PARTIES = [
-  { name: 'Organizer', label: 'Organizatör', icon: 'bxs-badge-check', color: 'text-accent' },
-  { name: 'Alice', label: 'Alice (Kullanıcı)', icon: 'bxs-user', color: 'text-blue-400' },
-  { name: 'Bob', label: 'Bob (Kullanıcı)', icon: 'bxs-user', color: 'text-purple-400' },
-  { name: 'Artist', label: 'Sanatçı', icon: 'bxs-music', color: 'text-pink-400' },
-];
-
 export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props) => {
   const [mode, setMode] = useState<LoginMode>('sandbox');
   const [email, setEmail] = useState('');
@@ -30,6 +24,14 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [connectingParty, setConnectingParty] = useState<string | null>(null);
   const { showToast } = useToast();
+  const { t, lang, setLang } = useI18n();
+
+  const SANDBOX_PARTIES = [
+    { name: 'Organizer', label: t('login.partyOrganizer'), icon: 'bxs-badge-check', color: 'text-accent' },
+    { name: 'Alice', label: t('login.partyAlice'), icon: 'bxs-user', color: 'text-blue-400' },
+    { name: 'Bob', label: t('login.partyBob'), icon: 'bxs-user', color: 'text-purple-400' },
+    { name: 'Artist', label: t('login.partyArtist'), icon: 'bxs-music', color: 'text-pink-400' },
+  ];
 
   // ─── Sandbox Login ─────────────────────────────────────────
   const handleSandboxLogin = async (partyName: string) => {
@@ -38,14 +40,14 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
       const ok = await cantonService.connectSandbox(partyName);
       if (ok) {
         const s = cantonService.getState();
-        showToast('⚡', 'Bağlantı Kuruldu', `Sandbox'a ${partyName} olarak bağlandınız`, 'success');
+        showToast('⚡', t('login.connected'), `${t('login.connectedDetail')} ${partyName}`, 'success');
         // onConnect is handled by the state subscription in App.tsx
       } else {
         const s = cantonService.getState();
-        showToast('❌', 'Bağlantı Hatası', s.error || 'Bilinmeyen hata', 'error');
+        showToast('❌', t('login.connError'), s.error || t('login.unknownError'), 'error');
       }
     } catch (err: any) {
-      showToast('❌', 'Hata', err.message || 'Sandbox bağlantısı başarısız', 'error');
+      showToast('❌', t('login.error'), err.message || t('login.sandboxFailed'), 'error');
     }
     setConnectingParty(null);
   };
@@ -55,7 +57,7 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
     if (e) e.preventDefault();
     if (isAuthenticating || isConnecting) return;
     if (!email.trim() || !password.trim()) {
-      showToast('⚠️', 'Eksik Bilgi', 'Lütfen e-posta ve şifrenizi girin.', 'error');
+      showToast('⚠️', t('login.missingInfo'), t('login.missingInfoDetail'), 'error');
       return;
     }
     try {
@@ -64,7 +66,7 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
       onConnect(partyId);
     } catch (err: any) {
       console.error("Login failed:", err);
-      showToast('❌', 'Giriş Hatası', err.message || 'Giriş başarısız.', 'error');
+      showToast('❌', t('login.loginError'), err.message || t('login.loginFailed'), 'error');
     }
     setIsAuthenticating(false);
   };
@@ -88,7 +90,7 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
               Canton<span className="text-accent">●</span>Ticket
             </h1>
             <p className="text-text-muted text-sm mt-2">
-              Canton Hackathon — Bilet Platformu
+              {t('login.title')}
             </p>
           </div>
         </div>
@@ -125,9 +127,9 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
             /* ═══ SANDBOX MODE ═══ */
             <div className="relative space-y-5">
               <div>
-                <h3 className="text-xl font-bold text-white mb-1">Sandbox Girişi</h3>
+                <h3 className="text-xl font-bold text-white mb-1">{t('login.sandboxTitle')}</h3>
                 <p className="text-[11px] text-text-muted">
-                  Lokal Canton sandbox'a bağlanın. Bir rol seçin:
+                  {t('login.sandboxDesc')}
                 </p>
               </div>
 
@@ -160,17 +162,17 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
 
               <div className="flex items-center gap-2 text-[10px] text-text-muted bg-bg/50 p-3 rounded-lg border border-border">
                 <i className="bx bx-info-circle text-accent shrink-0"></i>
-                <span>Sandbox localhost:7575'te çalışıyor olmalı. <code className="text-accent">daml start</code> veya Docker ile başlatın.</span>
+                <span>{t('login.sandboxInfo')} <code className="text-accent">daml start</code> {t('login.sandboxInfoAction')}</span>
               </div>
             </div>
           ) : (
             /* ═══ DEVNET MODE ═══ */
             <form onSubmit={handleKeycloakLogin} className="relative space-y-4">
-              <h3 className="text-xl font-bold text-white mb-6">DevNet Girişi</h3>
+              <h3 className="text-xl font-bold text-white mb-6">{t('login.devnetTitle')}</h3>
               
               <div className="space-y-4">
                 <div className="relative text-left">
-                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1 mb-1 block">E-Posta</label>
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1 mb-1 block">{t('login.email')}</label>
                   <div className="relative">
                     <i className="bx bx-envelope absolute left-4 top-1/2 -translate-y-1/2 text-accent text-lg"></i>
                     <input
@@ -185,7 +187,7 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
                 </div>
 
                 <div className="relative text-left">
-                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1 mb-1 block">Şifre</label>
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest ml-1 mb-1 block">{t('login.password')}</label>
                   <div className="relative">
                     <i className="bx bx-lock-alt absolute left-4 top-1/2 -translate-y-1/2 text-accent text-lg"></i>
                     <input
@@ -208,12 +210,12 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
                 {isLoading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    <span>Bağlanıyor...</span>
+                    <span>{t('login.connecting')}</span>
                   </>
                 ) : (
                   <>
                     <i className="bx bx-log-in-circle text-2xl"></i>
-                    <span>Keycloak ile Giriş Yap</span>
+                    <span>{t('login.keycloakLogin')}</span>
                   </>
                 )}
               </button>
@@ -231,7 +233,7 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
             <div className="flex items-start gap-3">
               <i className="bx bx-error-circle text-red-500 text-xl shrink-0 mt-0.5"></i>
               <div>
-                <p className="text-xs font-bold text-red-500">Bağlantı Hatası</p>
+                <p className="text-xs font-bold text-red-500">{t('login.connectionError')}</p>
                 <p className="text-[11px] text-text-muted mt-1 leading-relaxed font-mono">
                   {connectionError}
                 </p>
@@ -241,11 +243,18 @@ export const WalletLogin = ({ onConnect, isConnecting, connectionError }: Props)
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-center gap-2 text-[10px] text-text-muted">
+        <div className="flex items-center justify-center gap-3 text-[10px] text-text-muted">
           <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
           <span className="font-mono uppercase tracking-widest">
             {mode === 'sandbox' ? 'Local Sandbox · JWT' : 'Noders NaaS · Keycloak OIDC'}
           </span>
+          <span className="text-border">|</span>
+          <button
+            onClick={() => setLang(lang === 'tr' ? 'en' : 'tr')}
+            className="font-bold text-accent hover:text-white transition-colors uppercase"
+          >
+            {lang === 'tr' ? 'EN' : 'TR'}
+          </button>
         </div>
       </motion.div>
     </div>

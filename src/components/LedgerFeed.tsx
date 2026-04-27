@@ -5,6 +5,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fmtUsd } from '../utils/format';
+import { useI18n } from '../i18n';
 import type { RoyaltyContract, EventContract, TicketContract } from '../services/damlLedger';
 
 interface FeedEntry {
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
+  const { t } = useI18n();
   // Build a combined feed from all contract data
   const feed: FeedEntry[] = [];
 
@@ -34,7 +36,7 @@ export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
       type: 'create',
       title: 'Create Event',
       detail: e.payload.name,
-      amount: `${e.payload.totalTickets} bilet · ${fmtUsd(e.payload.price)}`,
+      amount: `${e.payload.totalTickets} ${t('feed.ticketUnit')} · ${fmtUsd(e.payload.price)}`,
       time: e.payload.date,
     });
   });
@@ -47,19 +49,19 @@ export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
       title: 'Exercise BuySecondary',
       detail: `${r.payload.eventName} — ${r.payload.ticketSeat}`,
       amount: `${fmtUsd(r.payload.salePrice)}`,
-      royalty: `+${fmtUsd(r.payload.royaltyAmount)} → Sanatçı`,
+      royalty: `+${fmtUsd(r.payload.royaltyAmount)} ${t('feed.toArtist')}`,
       time: 'Ledger',
     });
   });
 
   // Add tickets as PRIMARY entries
-  tickets.forEach(t => {
+  tickets.forEach(tk => {
     feed.push({
-      id: `tkt-${t.contractId}`,
-      type: t.payload.isUsed ? 'use' : 'primary',
-      title: t.payload.isUsed ? 'Exercise UseTicket' : 'Exercise BuyTicket',
-      detail: `${t.payload.eventName} — ${t.payload.seat}`,
-      amount: `${fmtUsd(t.payload.currentPrice)}`,
+      id: `tkt-${tk.contractId}`,
+      type: tk.payload.isUsed ? 'use' : 'primary',
+      title: tk.payload.isUsed ? 'Exercise UseTicket' : 'Exercise BuyTicket',
+      detail: `${tk.payload.eventName} — ${tk.payload.seat}`,
+      amount: `${fmtUsd(tk.payload.currentPrice)}`,
       time: 'Ledger',
     });
   });
@@ -90,18 +92,18 @@ export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
       <div className="glass-card h-[430px] flex flex-col">
         <div className="p-4 border-b border-border flex items-center justify-between">
           <h3 className="text-xs font-bold flex items-center gap-2 tracking-widest">
-            <i className='bx bx-list-ul text-accent'></i> CANLI PROTOKOL FEED
+            <i className='bx bx-list-ul text-accent'></i> {t('feed.liveFeed')}
           </h3>
           <span className="text-[8px] font-mono text-accent animate-pulse flex items-center gap-1">
             <span className="w-1.5 h-1.5 bg-accent rounded-full"></span>
-            KAYIT
+            {t('feed.recording')}
           </span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono scrollbar-hide">
           {feed.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-text-muted">
               <i className='bx bx-loader-alt text-3xl mb-3 animate-spin opacity-20'></i>
-              <p className="text-[10px] uppercase tracking-widest">Ledger bekleniyor...</p>
+              <p className="text-[10px] uppercase tracking-widest">{t('feed.waiting')}</p>
             </div>
           ) : (
             <AnimatePresence initial={false}>
@@ -149,26 +151,26 @@ export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
       <div className="grid grid-cols-1 gap-4">
         <div className="glass-card p-6 flex flex-col justify-between h-36 relative group overflow-hidden transition-transform hover:-translate-y-1">
           <i className='bx bx-pulse absolute top-4 right-4 text-accent/10 text-6xl transition-transform group-hover:scale-125'></i>
-          <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Protokol Aktivitesi</p>
+          <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{t('feed.protocolActivity')}</p>
           <div>
             <h4 className="text-3xl font-extrabold tracking-tighter">{totalTicketsSold}</h4>
-            <p className="text-[10px] text-text-muted uppercase font-bold mt-1">Toplam Bilet Satışı</p>
+            <p className="text-[10px] text-text-muted uppercase font-bold mt-1">{t('feed.totalTicketSales')}</p>
           </div>
         </div>
         <div className="glass-card p-6 flex flex-col justify-between h-36 relative group overflow-hidden transition-transform hover:-translate-y-1">
           <i className='bx bx-transfer absolute top-4 right-4 text-accent-purple/10 text-6xl transition-transform group-hover:scale-125'></i>
-          <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">İkinci El Transfer</p>
+          <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{t('feed.secondaryTransfer')}</p>
           <div>
             <h4 className="text-3xl font-extrabold tracking-tighter">{totalSecondarySales}</h4>
-            <p className="text-[10px] text-text-muted uppercase font-bold mt-1">Royalty İşlemi</p>
+            <p className="text-[10px] text-text-muted uppercase font-bold mt-1">{t('feed.royaltyTransaction')}</p>
           </div>
         </div>
         <div className="glass-card p-6 flex flex-col justify-between h-36 relative group overflow-hidden transition-transform hover:-translate-y-1">
           <i className='bx bx-line-chart absolute top-4 right-4 text-accent-purple/10 text-6xl transition-transform group-hover:scale-125'></i>
-          <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Dağıtılan Royalty</p>
+          <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{t('feed.distributedRoyalty')}</p>
           <div>
             <h4 className="text-3xl font-extrabold text-accent-purple tracking-tighter">{fmtUsd(totalRoyalty)}</h4>
-            <p className="text-[10px] text-text-muted uppercase font-bold mt-1">Sanatçılara Ödenen</p>
+            <p className="text-[10px] text-text-muted uppercase font-bold mt-1">{t('feed.paidToArtists')}</p>
           </div>
         </div>
       </div>
