@@ -9,235 +9,238 @@
 ---
 
 # 🎫 Canton Resonance
- 
+
 > **A high-performance event ticketing and royalty settlement platform built on the Canton Network.**
- 
-Canton Resonance; etkinlik biletlerini, sanatçı telif ödemelerini ve organizatör–alıcı iş akışlarını **Daml akıllı sözleşmeleri** ile yönetir. Arka planda Canton Sandbox (yerel geliştirme) veya Canton DevNet (canlı ağ) ile çalışır. Ön yüz **React 19 + Vite**, arka uç **Express + TypeScript** ile yazılmıştır.
- 
+
+Canton Resonance manages event tickets, artist royalty payments, and organizer–buyer workflows using **Daml smart contracts**. It runs on Canton Sandbox (local development) or Canton DevNet (live network) in the background. The frontend is built with **React 19 + Vite**, and the backend with **Express + TypeScript**.
+
 ---
- 
-## 📋 İçindekiler
- 
-- [Proje Adı ve Açıklama](#-canton-resonance)
-- [Özellikler](#-özellikler)
-- [Gereksinimler](#-gereksinimler)
-- [Kurulum](#-kurulum)
-- [Konfigürasyon (.env)](#-konfigürasyon-env)
-- [Kullanım](#-kullanım)
-- [Proje Yapısı](#-proje-yapısı)
-- [API Referansı](#-api-referansı)
-- [Docker ile Çalıştırma](#-docker-ile-çalıştırma)
-- [Daml Akıllı Sözleşmeleri](#-daml-akıllı-sözleşmeleri)
-- [Ekran Görüntüleri / Demo](#-ekran-görüntüleri--demo)
-- [Katkıda Bulunma](#-katkıda-bulunma)
-- [Lisans](#-lisans)
-- [İletişim / Destek](#-iletişim--destek)
+
+## 📋 Table of Contents
+
+- [Project Overview](#-canton-resonance)
+- [Features](#-features)
+- [Requirements](#-requirements)
+- [Installation](#-installation)
+- [Configuration (.env)](#️-configuration-env)
+- [Usage](#-usage)
+- [Project Structure](#-project-structure)
+- [API Reference](#-api-reference)
+- [Running with Docker](#-running-with-docker)
+- [Daml Smart Contracts](#-daml-smart-contracts)
+- [Screenshots / Demo](#-screenshots--demo)
+- [Contributing](#-contributing)
+- [License](#-license)
+- [Contact / Support](#-contact--support)
 - [Roadmap](#-roadmap)
 - [Changelog](#-changelog)
 - [Acknowledgements](#-acknowledgements)
+
 ---
- 
-## ✨ Özellikler
- 
-- **Daml Akıllı Sözleşmeleri** — `Ticket` ve `Event` şablonlarıyla güvenli, denetlenebilir iş mantığı
-- **Canton Sandbox Desteği** — İmzasız JWT ile yerel geliştirme; harici cüzdana gerek yok
-- **Canton DevNet Desteği** — Signed Bearer token ile canlı ağ entegrasyonu
-- **Bridge Katmanı** — Ledger API v2 (`/v2/commands/submit-and-wait`, `/v2/state/active-contracts`) endpoint'lerini eski JSON API formatına dönüştürür
-- **Dinamik Package ID Çözümü** — Derleme çıktısından otomatik `packageId` okuma
-- **Party Yönetimi** — Sandbox'ta otomatik parti oluşturma ve Admin token üretimi
-- **React 19 UI** — Tailwind CSS v4 + Motion animasyon + Lucide ikonları
-- **Gemini AI Entegrasyonu** — `@google/genai` SDK üzerinden AI destekli öneriler
-- **Ethers.js v6** — Opsiyonel zincir bağlantısı için dahil
-- **Docker + Docker Compose** — Tek komutla sandbox ortamı
+
+## ✨ Features
+
+- **Daml Smart Contracts** — Secure, auditable business logic with `Ticket` and `Event` templates
+- **Canton Sandbox Support** — Local development with unsigned JWT; no external wallet required
+- **Canton DevNet Support** — Live network integration with signed Bearer tokens
+- **Bridge Layer** — Translates Ledger API v2 endpoints (`/v2/commands/submit-and-wait`, `/v2/state/active-contracts`) into the legacy JSON API format
+- **Dynamic Package ID Resolution** — Automatically reads `packageId` from build output
+- **Party Management** — Automatic party creation and Admin token generation in Sandbox
+- **React 19 UI** — Tailwind CSS v4 + Motion animations + Lucide icons
+- **Gemini AI Integration** — AI-powered suggestions via `@google/genai` SDK
+- **Ethers.js v6** — Included for optional on-chain connectivity
+- **Docker + Docker Compose** — One-command sandbox environment setup
+
 ---
- 
-## 🛠 Gereksinimler
- 
-| Bağımlılık | Versiyon |
+
+## 🛠 Requirements
+
+| Dependency | Version |
 |---|---|
-| Node.js | ≥ 18.x (ESM desteği) |
+| Node.js | ≥ 18.x (ESM support) |
 | npm | ≥ 9.x |
 | Daml SDK | 2.10.4 |
-| Docker | ≥ 24.x (Docker kurulumu opsiyonel, sadece sandbox Docker için) |
+| Docker | ≥ 24.x (optional, only for Docker-based sandbox) |
 | Docker Compose | ≥ 2.x |
- 
-> **Not:** Daml SDK kurulumu için → [docs.daml.com](https://docs.daml.com/getting-started/installation.html)
- 
+
+> **Note:** For Daml SDK installation → [docs.daml.com](https://docs.daml.com/getting-started/installation.html)
+
 ---
- 
-## 📦 Kurulum
- 
-### 1. Repoyu klonla
- 
+
+## 📦 Installation
+
+### 1. Clone the repository
+
 ```bash
 git clone https://github.com/Kewe63/CantonResonance1.git
 cd CantonResonance1
 ```
- 
-### 2. Bağımlılıkları yükle
- 
+
+### 2. Install dependencies
+
 ```bash
 npm install
 ```
- 
-### 3. Ortam değişkenlerini ayarla
- 
+
+### 3. Set up environment variables
+
 ```bash
 cp .env.example .env
-# .env dosyasını düzenle (aşağıdaki Konfigürasyon bölümüne bak)
+# Edit the .env file (see the Configuration section below)
 ```
- 
-### 4. Daml kodunu derle (Daml SDK kuruluysa)
- 
+
+### 4. Build the Daml code (if Daml SDK is installed)
+
 ```bash
 daml build
 daml codegen js .daml/dist/canton-ticket-0.1.0.dar -o src/daml.js
 ```
- 
-### 5. Geliştirme sunucusunu başlat
- 
+
+### 5. Start the development server
+
 ```bash
 npm run dev
 ```
- 
-Uygulama `http://localhost:3000` adresinde çalışır.
- 
+
+The application will be available at `http://localhost:3000`.
+
 ---
- 
-## ⚙️ Konfigürasyon (.env)
- 
-`.env.example` dosyasını kopyalayarak `.env` oluştur:
- 
+
+## ⚙️ Configuration (.env)
+
+Copy `.env.example` to create your `.env` file:
+
 ```env
 # Canton Resonance 2.0 - Environment Variables
- 
-# --- PRODUCTION / DEVNET AYARLARI ---
-# Eğer Canton DevNet'e bağlanıyorsanız bu değerleri doldurun:
+
+# --- PRODUCTION / DEVNET SETTINGS ---
+# Fill these in if you are connecting to Canton DevNet:
 CANTON_JSON_API_URL="https://api.your-canton-node.com"
 CANTON_JWT_TOKEN="your-signed-jwt-token"
 CANTON_PARTY_ID="your-party-id"
- 
-# --- YEREL GELİŞTİRME ---
-# Yerel sandbox için bu değerlere gerek yok.
-# Uygulama varsayılan olarak http://localhost:7575 kullanır
-# ve imzasız sandbox tokenları üretir.
- 
-# Node sunucu portu (varsayılan: 3000)
+
+# --- LOCAL DEVELOPMENT ---
+# These values are not needed for local sandbox.
+# The app defaults to http://localhost:7575
+# and generates unsigned sandbox tokens automatically.
+
+# Node server port (default: 3000)
 PORT=3000
 ```
- 
-| Değişken | Açıklama | Zorunlu mu? |
+
+| Variable | Description | Required? |
 |---|---|---|
-| `CANTON_JSON_API_URL` | Canton JSON API endpoint | Sadece DevNet için |
-| `CANTON_JWT_TOKEN` | İmzalı JWT token | Sadece DevNet için |
-| `CANTON_PARTY_ID` | Canton parti kimliği | Sadece DevNet için |
-| `PORT` | Express sunucu portu | Hayır (varsayılan: 3000) |
- 
-> Yerel sandbox modunda hiçbir değişken doldurulmadan da çalışır.
- 
+| `CANTON_JSON_API_URL` | Canton JSON API endpoint | DevNet only |
+| `CANTON_JWT_TOKEN` | Signed JWT token | DevNet only |
+| `CANTON_PARTY_ID` | Canton party identifier | DevNet only |
+| `PORT` | Express server port | No (default: 3000) |
+
+> In local sandbox mode, the app works without filling in any variables.
+
 ---
- 
-## 🚀 Kullanım
- 
-### Temel kullanım — Yerel sandbox
- 
+
+## 🚀 Usage
+
+### Basic usage — Local sandbox
+
 ```bash
-# 1. Sandbox'ı Docker ile başlat
+# 1. Start the sandbox with Docker
 docker-compose up -d
- 
-# 2. Uygulamayı başlat
+
+# 2. Start the application
 npm run dev
- 
-# 3. Tarayıcıda aç
+
+# 3. Open in browser
 open http://localhost:3000
 ```
- 
-### Mevcut npm scriptleri
- 
-| Script | Açıklama |
+
+### Available npm scripts
+
+| Script | Description |
 |---|---|
-| `npm run dev` | Vite + Express geliştirme sunucusunu başlatır |
-| `npm run build` | Production build oluşturur (`dist/`) |
-| `npm run preview` | Production build'i önizler |
-| `npm run lint` | TypeScript tip kontrolü yapar (`tsc --noEmit`) |
-| `npm run clean` | `dist/` klasörünü temizler |
- 
-### Uygulama akışı
- 
-1. Kullanıcı UI'da oturum açar (party seçer veya oluşturur)
-2. Organizatör `Event` kontratı oluşturur → Daml `create` komutu
-3. Alıcı bilet satın alır → `Transfer` choice çalıştırılır
-4. Royalty ödemesi → `RoyaltySettle` choice ile sanatçıya iletilir
-5. Aktif kontratlar `/api/canton/query` üzerinden listelenir
+| `npm run dev` | Starts the Vite + Express development server |
+| `npm run build` | Creates a production build (`dist/`) |
+| `npm run preview` | Previews the production build |
+| `npm run lint` | Runs TypeScript type checking (`tsc --noEmit`) |
+| `npm run clean` | Removes the `dist/` folder |
+
+### Application flow
+
+1. User logs in via UI (selects or creates a party)
+2. Organizer creates an `Event` contract → Daml `create` command
+3. Buyer purchases a ticket → `Transfer` choice is executed
+4. Royalty payment → Forwarded to the artist via the `RoyaltySettle` choice
+5. Active contracts are listed via `/api/canton/query`
+
 ---
- 
-## 📁 Proje Yapısı
- 
+
+## 📁 Project Structure
+
 ```
 CantonResonance1/
 │
-├── daml/                          # Daml akıllı sözleşmeleri
-│   ├── Ticket.daml                # Bilet şablonu
-│   ├── Event.daml                 # Etkinlik şablonu
-│   └── Setup.daml                 # Init scripti (daml start)
+├── daml/                          # Daml smart contracts
+│   ├── Ticket.daml                # Ticket template
+│   ├── Event.daml                 # Event template
+│   └── Setup.daml                 # Init script (daml start)
 │
-├── src/                           # React ön yüz
-│   ├── daml.js/                   # Daml codegen çıktısı (JS binding'leri)
-│   ├── components/                # React bileşenleri
-│   ├── hooks/                     # Custom React hook'ları
-│   ├── pages/                     # Sayfa bileşenleri
-│   └── main.tsx                   # Uygulama giriş noktası
+├── src/                           # React frontend
+│   ├── daml.js/                   # Daml codegen output (JS bindings)
+│   ├── components/                # React components
+│   ├── hooks/                     # Custom React hooks
+│   ├── pages/                     # Page components
+│   └── main.tsx                   # Application entry point
 │
-├── server.ts                      # Express sunucu + Canton proxy/bridge
-├── vite.config.ts                 # Vite yapılandırması
-├── tsconfig.json                  # TypeScript yapılandırması
-├── daml.yaml                      # Daml proje tanımı (SDK 2.10.4)
-├── canton-sandbox.conf            # Canton sandbox ayarları
-├── docker-compose.yml             # Sandbox Docker servisi
-├── Dockerfile                     # Uygulama Docker imajı
-├── Dockerfile.sandbox             # Sandbox Docker imajı
-├── entrypoint.sh                  # Docker entrypoint scripti
-├── metadata.json                  # Proje meta verisi
-├── .env.example                   # Ortam değişkenleri şablonu
+├── server.ts                      # Express server + Canton proxy/bridge
+├── vite.config.ts                 # Vite configuration
+├── tsconfig.json                  # TypeScript configuration
+├── daml.yaml                      # Daml project definition (SDK 2.10.4)
+├── canton-sandbox.conf            # Canton sandbox settings
+├── docker-compose.yml             # Sandbox Docker service
+├── Dockerfile                     # Application Docker image
+├── Dockerfile.sandbox             # Sandbox Docker image
+├── entrypoint.sh                  # Docker entrypoint script
+├── metadata.json                  # Project metadata
+├── .env.example                   # Environment variables template
 ├── .gitignore
-├── index.html                     # HTML giriş noktası
+├── index.html                     # HTML entry point
 └── package.json
 ```
- 
+
 ---
- 
-## 🔌 API Referansı
- 
-Tüm endpoint'ler `http://localhost:3000` üzerinde çalışır.
- 
+
+## 🔌 API Reference
+
+All endpoints run on `http://localhost:3000`.
+
 ### Express REST API
- 
-| Method | Path | Açıklama |
+
+| Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/test` | Sunucu sağlık kontrolü |
-| `GET` | `/api/package-id` | Daml codegen'den `packageId` okur |
-| `GET` | `/api/canton/parties` | Sandbox'taki tüm parti listesi |
-| `POST` | `/api/canton/allocate-party` | Yeni parti oluşturur |
-| `GET` | `/api/canton/health` | Canton JSON API bağlantı testi |
-| `POST` | `/api/canton/query` | Aktif kontratları sorgular |
-| `POST` | `/api/canton/create` | Yeni kontrat oluşturur |
-| `POST` | `/api/canton/exercise` | Kontrat choice'u çalıştırır |
-| `POST` | `/api/debug-log` | İstemci hata logları (geliştirme) |
- 
+| `GET` | `/api/test` | Server health check |
+| `GET` | `/api/package-id` | Reads `packageId` from Daml codegen |
+| `GET` | `/api/canton/parties` | Lists all parties in Sandbox |
+| `POST` | `/api/canton/allocate-party` | Creates a new party |
+| `GET` | `/api/canton/health` | Canton JSON API connectivity test |
+| `POST` | `/api/canton/query` | Queries active contracts |
+| `POST` | `/api/canton/create` | Creates a new contract |
+| `POST` | `/api/canton/exercise` | Executes a contract choice |
+| `POST` | `/api/debug-log` | Client error logging (development) |
+
 ### Bridge API (DevNet)
- 
-`/bridge/:action` — Ledger API v2'yi eski JSON API formatına köprüler.
- 
-| Method | Path | Açıklama |
+
+`/bridge/:action` — Bridges Ledger API v2 to the legacy JSON API format.
+
+| Method | Path | Description |
 |---|---|---|
-| `GET` | `/bridge/packages` | Yüklü paket ID'lerini listeler |
-| `POST` | `/bridge/upload-dar` | DAR dosyasını DevNet'e yükler |
-| `POST` | `/bridge/query` | Aktif kontratları sorgular (v2 format) |
-| `POST` | `/bridge/create` | Kontrat oluşturur, package ID fallback destekli |
-| `POST` | `/bridge/exercise` | Choice çalıştırır |
- 
-#### Örnek: Kontrat Oluşturma
- 
+| `GET` | `/bridge/packages` | Lists installed package IDs |
+| `POST` | `/bridge/upload-dar` | Uploads a DAR file to DevNet |
+| `POST` | `/bridge/query` | Queries active contracts (v2 format) |
+| `POST` | `/bridge/create` | Creates a contract with package ID fallback |
+| `POST` | `/bridge/exercise` | Executes a choice |
+
+#### Example: Create a Contract
+
 ```bash
 curl -X POST http://localhost:3000/api/canton/create \
   -H "Content-Type: application/json" \
@@ -247,14 +250,14 @@ curl -X POST http://localhost:3000/api/canton/create \
     "payload": {
       "organizer": "Alice::sandbox",
       "artist": "Bob::sandbox",
-      "title": "Rock Konseri",
+      "title": "Rock Concert",
       "date": "2026-06-15"
     }
   }'
 ```
- 
-#### Örnek: Kontrat Sorgulama
- 
+
+#### Example: Query Contracts
+
 ```bash
 curl -X POST http://localhost:3000/api/canton/query \
   -H "Content-Type: application/json" \
@@ -262,54 +265,55 @@ curl -X POST http://localhost:3000/api/canton/query \
     "templateIds": ["<packageId>:Ticket:Event"]
   }'
 ```
- 
-### Canton JSON API Port Haritası
- 
-| Port | Protokol | Açıklama |
+
+### Canton JSON API Port Map
+
+| Port | Protocol | Description |
 |---|---|---|
-| `3000` | HTTP | Express uygulama sunucusu |
+| `3000` | HTTP | Express application server |
 | `6865` | gRPC | Canton Ledger API |
 | `7575` | HTTP | Canton JSON API |
- 
+
 ---
- 
-## 🐳 Docker ile Çalıştırma
- 
-### Sandbox'ı Docker ile başlat
- 
+
+## 🐳 Running with Docker
+
+### Start the sandbox with Docker
+
 ```bash
 docker-compose up -d
 ```
- 
-`docker-compose.yml` içeriği:
-- **sandbox** servisi: Daml 2.10.4 sandbox'ı Linux üzerinde çalıştırır
-- Port `6865` (gRPC) ve `7575` (JSON API) dışarıya açılır
-### Sandbox loglarını takip et
- 
+
+`docker-compose.yml` includes:
+- **sandbox** service: Runs Daml 2.10.4 sandbox on Linux
+- Ports `6865` (gRPC) and `7575` (JSON API) are exposed externally
+
+### Follow sandbox logs
+
 ```bash
 docker-compose logs -f sandbox
 ```
- 
-### Durdur ve temizle
- 
+
+### Stop and clean up
+
 ```bash
 docker-compose down
-docker-compose down -v  # Volume'ları da sil
+docker-compose down -v  # Also remove volumes
 ```
- 
-### Sadece uygulamayı Docker ile çalıştır
- 
+
+### Run only the application with Docker
+
 ```bash
 docker build -t canton-resonance .
 docker run -p 3000:3000 --env-file .env canton-resonance
 ```
- 
+
 ---
- 
-## 📜 Daml Akıllı Sözleşmeleri
- 
-### Proje Tanımı (`daml.yaml`)
- 
+
+## 📜 Daml Smart Contracts
+
+### Project Definition (`daml.yaml`)
+
 ```yaml
 sdk-version: 2.10.4
 name: canton-ticket
@@ -324,27 +328,27 @@ codegen:
   js:
     output-directory: src/daml.js
 ```
- 
-### Daml Komutları
- 
+
+### Daml Commands
+
 ```bash
-# Proje derle
+# Build the project
 daml build
- 
-# Sandbox başlat (otomatik setup scripti çalışır)
+
+# Start the sandbox (setup script runs automatically)
 daml start
- 
-# JS binding'lerini üret
+
+# Generate JS bindings
 daml codegen js .daml/dist/canton-ticket-0.1.0.dar -o src/daml.js
- 
-# Daml REPL (interaktif)
+
+# Daml REPL (interactive)
 daml repl .daml/dist/canton-ticket-0.1.0.dar
 ```
- 
-### Sandbox Token (İmzasız)
- 
-Yerel geliştirmede sunucu otomatik imzasız JWT üretir:
- 
+
+### Sandbox Token (Unsigned)
+
+In local development, the server automatically generates an unsigned JWT:
+
 ```
 Header: { alg: "none", typ: "JWT" }
 Payload: {
@@ -357,100 +361,105 @@ Payload: {
   }
 }
 ```
- 
+
 ### Releases
- 
-| Sürüm | DAR Adı | Tarih |
+
+| Version | DAR Name | Date |
 |---|---|---|
-| 0.1.0 | canton-ticket-0.1.0 (LF 2.2) | Nisan 2026 |
- 
+| 0.1.0 | canton-ticket-0.1.0 (LF 2.2) | April 2026 |
+
 ---
- 
-## 🖥 Ekran Görüntüleri / Demo
- 
-> Ekran görüntüleri ve canlı demo yakında eklenecek.
+
+## 🖥 Screenshots / Demo
+
+> Screenshots and a live demo will be added soon.
 >
-> Yerel demo için: `npm run dev` → `http://localhost:3000`
- 
+> For a local demo: `npm run dev` → `http://localhost:3000`
+
 ---
- 
-## 🤝 Katkıda Bulunma
- 
-Her türlü katkıya açığız! Aşağıdaki adımları izleyin:
- 
-1. Bu repoyu fork'layın
-2. Feature branch oluşturun:
+
+## 🤝 Contributing
+
+We welcome all contributions! Please follow these steps:
+
+1. Fork this repository
+2. Create a feature branch:
    ```bash
-   git checkout -b feat/özellik-adı
+   git checkout -b feat/feature-name
    ```
-3. Değişikliklerinizi commit'leyin:
+3. Commit your changes:
    ```bash
-   git commit -m "feat: açıklayıcı commit mesajı"
+   git commit -m "feat: descriptive commit message"
    ```
-4. Branch'i push'layın:
+4. Push the branch:
    ```bash
-   git push origin feat/özellik-adı
+   git push origin feat/feature-name
    ```
-5. Pull Request açın
-### Kod Standartları
- 
-- TypeScript strict modu aktif (`tsc --noEmit` ile kontrol et)
-- ESM modül formatı kullan (`"type": "module"` zorunlu)
-- Yeni API endpoint'leri `server.ts`'e, Daml şablonları `daml/` klasörüne eklenir
-- Commit mesajları [Conventional Commits](https://www.conventionalcommits.org/) formatında olmalı
-### Issue Açma
- 
-Bug veya özellik isteği için [GitHub Issues](https://github.com/Kewe63/CantonResonance1/issues) kullanın. Issue açarken:
-- Ortamı belirtin (yerel sandbox mı, DevNet mi?)
-- Hata mesajını ekleyin
-- Adım adım yeniden üretme talimatları ekleyin
+5. Open a Pull Request
+
+### Code Standards
+
+- TypeScript strict mode is enabled (check with `tsc --noEmit`)
+- Use ESM module format (`"type": "module"` is required)
+- New API endpoints go in `server.ts`; Daml templates go in the `daml/` folder
+- Commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/) format
+
+### Opening an Issue
+
+For bugs or feature requests, use [GitHub Issues](https://github.com/Kewe63/CantonResonance1/issues). When opening an issue, please:
+- Specify your environment (local sandbox or DevNet?)
+- Include the error message
+- Provide step-by-step reproduction instructions
+
 ---
- 
-## 📄 Lisans
- 
-Bu proje şu an için özel bir lisans belirtmemiştir. Kullanım öncesinde repo sahibiyle iletişime geçin.
- 
+
+## 📄 License
+
+This project does not currently specify a license. Please contact the repository owner before use.
+
 ---
- 
-## 📬 İletişim / Destek
- 
+
+## 📬 Contact / Support
+
 - **GitHub:** [@Kewe63](https://github.com/Kewe63)
 - **Issues:** [GitHub Issues](https://github.com/Kewe63/CantonResonance1/issues)
-- **Canton Geliştirici Topluluğu:** [discuss.daml.com](https://discuss.daml.com)
+- **Canton Developer Community:** [discuss.daml.com](https://discuss.daml.com)
+
 ---
- 
- 
+
 ## 🗺 Roadmap
- 
-- [ ] Kullanıcı kimlik doğrulama UI'ı (DevNet JWT login akışı)
-- [ ] Bilet transferi ve ikincil piyasa desteği
-- [ ] Royalty otomatik dağıtım akışı
-- [ ] Canton DevNet'te çoklu parti desteği
-- [ ] Mobil uyumlu responsive tasarım
-- [ ] End-to-end test altyapısı (Playwright)
+
+- [ ] User authentication UI (DevNet JWT login flow)
+- [ ] Ticket transfer and secondary market support
+- [ ] Automated royalty distribution flow
+- [ ] Multi-party support on Canton DevNet
+- [ ] Mobile-friendly responsive design
+- [ ] End-to-end test infrastructure (Playwright)
 - [ ] GitHub Actions CI/CD pipeline
-- [ ] Canlı demo deployment (Vercel / Railway)
+- [ ] Live demo deployment (Vercel / Railway)
+
 ---
- 
+
 ## 📝 Changelog
- 
-### v0.1.0 — Nisan 2026
-- İlk stabil release
-- Canton Sandbox + DevNet çift mod desteği
-- Bridge katmanı: Ledger API v2 → JSON API uyum katmanı
-- Dinamik package ID çözümü (`/api/package-id`)
-- Sandbox admin token üretimi
-- Docker Compose ile tek komut sandbox kurulumu
+
+### v0.1.0 — April 2026
+- Initial stable release
+- Dual-mode support for Canton Sandbox + DevNet
+- Bridge layer: Ledger API v2 → JSON API compatibility layer
+- Dynamic package ID resolution (`/api/package-id`)
+- Sandbox admin token generation
+- One-command sandbox setup with Docker Compose
 - DAR release: `canton-ticket-dar-0.1.0-lf22`
+
 ---
- 
+
 ## 🙏 Acknowledgements
- 
-- [Digital Asset / Daml](https://daml.com) — Akıllı sözleşme altyapısı
-- [Canton Network](https://canton.io) — Dağıtık defter protokolü
-- [Google AI Studio](https://aistudio.google.com) — Repository template & Gemini entegrasyonu (`@google/genai`)
-- [Vite](https://vitejs.dev) — Hızlı geliştirme sunucusu
-- [Tailwind CSS](https://tailwindcss.com) — Stil çerçevesi
-- [Motion](https://motion.dev) — Animasyon kütüphanesi
-- [Lucide React](https://lucide.dev) — İkon seti
-- [Ethers.js](https://docs.ethers.org) — Ethereum bağlantısı
+
+- [Digital Asset / Daml](https://daml.com) — Smart contract infrastructure
+- [Canton Network](https://canton.io) — Distributed ledger protocol
+- [Google AI Studio](https://aistudio.google.com) — Repository template & Gemini integration (`@google/genai`)
+- [Vite](https://vitejs.dev) — Fast development server
+- [Tailwind CSS](https://tailwindcss.com) — Styling framework
+- [Motion](https://motion.dev) — Animation library
+- [Lucide React](https://lucide.dev) — Icon set
+- [Ethers.js](https://docs.ethers.org) — Ethereum connectivity
