@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from './Toast';
 import { DynamicLighting } from './DynamicLighting';
+import { fmtUsd, fmtPct } from '../utils/format';
 import type { EventContract } from '../services/damlLedger';
 
 interface Props {
@@ -26,8 +27,10 @@ export const OrganizerPanel = ({ events, onCreateEvent, onCancelEvent, partyId }
       await Promise.race([
         onCreateEvent({
           name: form.name, date: form.date, venue: form.venue,
-          totalTickets: form.totalTickets, price: form.price, royaltyPct: form.royaltyPct,
-          maxResaleMultiplier: form.hasMaxResale ? form.maxResale : null,
+          totalTickets: parseInt(String(form.totalTickets)) || 0,
+          price: parseFloat(String(form.price)) || 0,
+          royaltyPct: parseFloat(String(form.royaltyPct)) || 0,
+          maxResaleMultiplier: form.hasMaxResale ? parseFloat(String(form.maxResale)) : null,
         }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('İşlem zaman aşımına uğradı. DevNet yavaş/erişilemez veya yetki gerekiyor.')), 45_000)
@@ -60,7 +63,7 @@ export const OrganizerPanel = ({ events, onCreateEvent, onCancelEvent, partyId }
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Toplam Kazanç', value: `₮${totalRevenue}`, color: 'text-accent' },
+          { label: 'Toplam Kazanç', value: `$${totalRevenue}`, color: 'text-accent' },
           { label: 'Satılan Bilet', value: `${totalSold}`, color: 'text-accent-purple' },
           { label: 'Toplam Arz', value: `${totalSupply}`, color: 'text-text-main' },
           { label: 'Aktif Etkinlik', value: `${events.filter(e => !e.payload.isCancelled).length}`, color: 'text-amber-400' },
@@ -109,9 +112,9 @@ export const OrganizerPanel = ({ events, onCreateEvent, onCancelEvent, partyId }
               <div className={`glass-card p-5 h-full ${cancelled ? 'opacity-50' : 'hover:border-accent/40'} transition-all`}>
                 <div className="flex justify-between items-start mb-3">
                   <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${cancelled ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-accent/10 text-accent border-accent/20'}`}>
-                    {cancelled ? 'İPTAL' : `%${event.payload.royaltyPct} ROYALTY`}
+                    {cancelled ? 'İPTAL' : `${fmtPct(event.payload.royaltyPct)} ROYALTY`}
                   </span>
-                  <p className="text-xs font-bold text-accent">{event.payload.price} USDC</p>
+                  <p className="text-xs font-bold text-accent">{fmtUsd(event.payload.price)}</p>
                 </div>
                 <h3 className="text-lg font-bold mb-1">{event.payload.name}</h3>
                 <p className="text-[10px] text-text-muted mb-3"><i className='bx bx-map-pin text-accent'></i> {event.payload.venue} · {event.payload.date}</p>
@@ -124,7 +127,7 @@ export const OrganizerPanel = ({ events, onCreateEvent, onCancelEvent, partyId }
                 <div className="h-1.5 bg-bg rounded-full overflow-hidden border border-border">
                   <motion.div initial={{width:0}} animate={{width:`${Number(total)>0?(Number(sold)/Number(total))*100:0}%`}} className={`h-full ${Number(sold)>=Number(total)?'bg-red-500':'bg-accent'}`}/>
                 </div>
-                {!cancelled && sold===0 && (
+                {!cancelled && Number(sold)===0 && (
                   <button onClick={()=>onCancelEvent(event.contractId)} className="mt-3 w-full py-2 rounded-lg text-[10px] font-bold border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-all">İptal Et</button>
                 )}
               </div>

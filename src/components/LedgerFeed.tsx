@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { fmtUsd } from '../utils/format';
 import type { RoyaltyContract, EventContract, TicketContract } from '../services/damlLedger';
 
 interface FeedEntry {
@@ -33,7 +34,7 @@ export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
       type: 'create',
       title: 'Create Event',
       detail: e.payload.name,
-      amount: `${e.payload.totalTickets} bilet · ${e.payload.price} USDC`,
+      amount: `${e.payload.totalTickets} bilet · ${fmtUsd(e.payload.price)}`,
       time: e.payload.date,
     });
   });
@@ -45,8 +46,8 @@ export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
       type: 'secondary',
       title: 'Exercise BuySecondary',
       detail: `${r.payload.eventName} — ${r.payload.ticketSeat}`,
-      amount: `${r.payload.salePrice} USDC`,
-      royalty: `+${r.payload.royaltyAmount} USDC → Sanatçı`,
+      amount: `${fmtUsd(r.payload.salePrice)}`,
+      royalty: `+${fmtUsd(r.payload.royaltyAmount)} → Sanatçı`,
       time: 'Ledger',
     });
   });
@@ -58,7 +59,7 @@ export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
       type: t.payload.isUsed ? 'use' : 'primary',
       title: t.payload.isUsed ? 'Exercise UseTicket' : 'Exercise BuyTicket',
       detail: `${t.payload.eventName} — ${t.payload.seat}`,
-      amount: `${t.payload.currentPrice} USDC`,
+      amount: `${fmtUsd(t.payload.currentPrice)}`,
       time: 'Ledger',
     });
   });
@@ -166,7 +167,7 @@ export const LedgerFeed = ({ events, tickets, receipts }: Props) => {
           <i className='bx bx-line-chart absolute top-4 right-4 text-accent-purple/10 text-6xl transition-transform group-hover:scale-125'></i>
           <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Dağıtılan Royalty</p>
           <div>
-            <h4 className="text-3xl font-extrabold text-accent-purple tracking-tighter">{totalRoyalty.toFixed(1)} USDC</h4>
+            <h4 className="text-3xl font-extrabold text-accent-purple tracking-tighter">{fmtUsd(totalRoyalty)}</h4>
             <p className="text-[10px] text-text-muted uppercase font-bold mt-1">Sanatçılara Ödenen</p>
           </div>
         </div>

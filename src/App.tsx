@@ -87,38 +87,58 @@ function AppInner() {
     return unsub;
   }, []);
 
+  const archivedContractIdsRef = useRef<Set<string>>(new Set(
+    JSON.parse(localStorage.getItem('archivedContractIds') || '[]')
+  ));
+
+  const addArchivedContract = useCallback((cid: string) => {
+    archivedContractIdsRef.current.add(cid);
+    try {
+      const arr = Array.from(archivedContractIdsRef.current);
+      if (arr.length > 100) arr.splice(0, arr.length - 100);
+      localStorage.setItem('archivedContractIds', JSON.stringify(arr));
+    } catch {}
+  }, []);
+
   const mergeWithStickyEvents = useCallback((incomingEvents: EventContract[]) => {
     const stickyMap = stickyCreatedEventsRef.current;
 
-    const realIncomingEvents = incomingEvents.filter((event) => !String(event.contractId).startsWith('unparsed-'));
-    const incomingIds = new Set(realIncomingEvents.map((event) => event.contractId));
-
-    const sameEventIdentity = (left: EventContract['payload'], right: EventContract['payload']) => (
-      left.name === right.name
-      && left.date === right.date
-      && left.venue === right.venue
-      && String(left.organizer || '') === String(right.organizer || '')
+    const realIncomingEvents = incomingEvents.filter(
+      (event) => !String(event.contractId).startsWith('unparsed-') && !archivedContractIdsRef.current.has(event.contractId)
     );
+    
+    // Deduplicate by contractId only
+    const byContractId = new Map<string, EventContract>();
+    realIncomingEvents.forEach(event => {
+      byContractId.set(event.contractId, event);
+    });
+    const finalIncomingEvents = Array.from(byContractId.values());
+    const incomingIds = new Set(finalIncomingEvents.map(e => e.contractId));
 
+    const now = Date.now();
     for (const [stickyId, stickyEvent] of stickyMap.entries()) {
       if (!stickyEvent?.payload) {
         stickyMap.delete(stickyId);
         continue;
       }
 
-      const resolvedByExactContractId = incomingIds.has(stickyEvent.contractId);
-      const resolvedByIdentity = realIncomingEvents.some((event) => sameEventIdentity(stickyEvent.payload, event.payload));
-
-      if (resolvedByExactContractId || resolvedByIdentity) {
+      if (incomingIds.has(stickyEvent.contractId)) {
+        stickyMap.delete(stickyId);
+        continue;
+      }
+      
+      const age = now - ((stickyEvent as any)._stickyTimestamp || 0);
+      if (age > 30_000) {
         stickyMap.delete(stickyId);
       }
     }
 
     const stickyValues = Array.from(stickyMap.values()) as EventContract[];
-    const stickyOnly = stickyValues.filter((event) => !incomingIds.has(event.contractId));
+    const stickyOnly = stickyValues.filter(event => !incomingIds.has(event.contractId) && !archivedContractIdsRef.current.has(event.contractId));
 
-    return [...realIncomingEvents, ...stickyOnly];
+    return [...finalIncomingEvents, ...stickyOnly];
   }, []);
+
   // ─── Data fetching ─────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     try {
@@ -129,10 +149,14 @@ function AppInner() {
         cantonService.getRoyaltyReceipts(),
       ]);
 
-      const mergedEvents = mergeWithStickyEvents(ev);
-      setEvents(mergedEvents);
-      setTickets(tk);
-      setListings(ls);
+      setEvents(mergeWithStickyEvents(ev));
+      
+      const realTickets = tk.filter(t => !archivedContractIdsRef.current.has(t.contractId));
+      setTickets(realTickets);
+
+      const realListings = ls.filter(l => !archivedContractIdsRef.current.has(l.contractId));
+      setListings(realListings);
+
       setReceipts(rc);
     } catch (err) {
       console.warn('Fetch failed, using offline state', err);
@@ -219,6 +243,7 @@ function AppInner() {
 
   const handleCancelEvent = async (cid: string) => {
     await cantonService.cancelEvent(cid);
+    addArchivedContract(cid);
     showToast('🗑️', 'Etkinlik İptal Edildi', 'Event kontratı iptal edildi');
     await fetchAll();
   };
@@ -304,8 +329,12 @@ function AppInner() {
       }
     }
 
+    addArchivedContract(eventCid);
+    stickyCreatedEventsRef.current.delete(eventCid);
+
     if (bridgeCreatedEvent) {
-      const createdEvent = bridgeCreatedEvent;
+      const createdEvent = { ...bridgeCreatedEvent } as EventContract;
+      (createdEvent as any)._stickyTimestamp = Date.now();
       stickyCreatedEventsRef.current.set(createdEvent.contractId, createdEvent);
       setEvents((prev) => mergeWithStickyEvents([
         createdEvent,
@@ -414,21 +443,26 @@ function AppInner() {
 
   const handleListForSale = async (ticketCid: string, price: number) => {
     await cantonService.listForSale(ticketCid, price);
+    addArchivedContract(ticketCid);
+    setTickets(prev => prev.filter(t => t.contractId !== ticketCid));
     await fetchAll();
   };
 
   const handleBuySecondary = async (listingCid: string) => {
     await cantonService.buySecondary(listingCid);
+    addArchivedContract(listingCid);
     await fetchAll();
   };
 
   const handleCancelListing = async (listingCid: string) => {
     await cantonService.cancelListing(listingCid);
+    addArchivedContract(listingCid);
     await fetchAll();
   };
 
   const handleUseTicket = async (ticketCid: string) => {
     await cantonService.useTicket(ticketCid);
+    addArchivedContract(ticketCid);
     showToast('✅', 'Bilet Kullanıldı', 'Etkinliğe giriş kaydedildi');
     await fetchAll();
   };
@@ -573,6 +607,7 @@ function AppInner() {
                 )}
                 {role === 'artist' && (
                   <ArtistPanel
+                    events={events}
                     receipts={receipts}
                     partyId={partyId || ''}
                   />

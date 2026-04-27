@@ -5,14 +5,16 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { DynamicLighting } from './DynamicLighting';
-import type { RoyaltyContract } from '../services/damlLedger';
+import { fmtUsd, fmtPct } from '../utils/format';
+import type { RoyaltyContract, EventContract } from '../services/damlLedger';
 
 interface Props {
+  events: EventContract[];
   receipts: RoyaltyContract[];
   partyId: string;
 }
 
-export const ArtistPanel = ({ receipts, partyId }: Props) => {
+export const ArtistPanel = ({ events, receipts, partyId }: Props) => {
   const totalRoyalty = receipts.reduce((sum, r) => sum + parseFloat(r.payload.royaltyAmount || '0'), 0);
   const totalSales = receipts.length;
   const avgRoyalty = totalSales > 0 ? totalRoyalty / totalSales : 0;
@@ -28,13 +30,32 @@ export const ArtistPanel = ({ receipts, partyId }: Props) => {
     });
   });
 
+  // Filter events where the logged-in user is the artist
+  const myEvents = events.filter(e => e.payload.artist === partyId);
+
+  // Primary Sales Earnings Calculation
+  let totalPrimaryEarnings = 0;
+  let totalPrimarySales = 0;
+  myEvents.forEach(e => {
+    const priceNum = parseFloat(String(e.payload.price || '0'));
+    const royaltyPctNum = parseFloat(String(e.payload.royaltyPct || '0'));
+    const artistShare = priceNum * (royaltyPctNum / 100);
+    const sold = parseInt(String(e.payload.ticketsSold || '0'));
+    totalPrimaryEarnings += artistShare * sold;
+    totalPrimarySales += sold;
+  });
+
+  const grandTotalEarnings = totalRoyalty + totalPrimaryEarnings;
+  const grandTotalSales = totalSales + totalPrimarySales;
+  const avgEarnings = grandTotalSales > 0 ? grandTotalEarnings / grandTotalSales : 0;
+
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-2xl md:text-3xl font-extrabold flex items-center gap-3">
           Sanatçı Panosu <i className='bx bxs-music text-accent-purple'></i>
         </h2>
-        <p className="text-text-muted text-sm">Her ikinci el satışta royalty otomatik olarak Canton üzerinden hesaplanır.</p>
+        <p className="text-text-muted text-sm">Birincil bilet satışlarından ve ikinci el transferlerden elde edilen toplam gelir.</p>
       </div>
 
       {/* Stats Cards */}
@@ -42,35 +63,39 @@ export const ArtistPanel = ({ receipts, partyId }: Props) => {
         <DynamicLighting intensity={0.12}>
           <div className="glass-card p-6 group hover:border-accent/30 transition-colors h-full">
             <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Toplam Kazanç</p>
-            <p className="text-3xl md:text-4xl font-extrabold text-accent">{totalRoyalty.toFixed(1)} <span className="text-base font-bold">USDC</span></p>
-            <div className="flex items-center gap-1 text-[10px] text-accent font-bold mt-2">
-              <i className='bx bx-trending-up'></i> Canton Ledger'dan
+            <p className="text-3xl md:text-4xl font-extrabold text-accent">{fmtUsd(grandTotalEarnings)}</p>
+            <div className="flex flex-col gap-0.5 text-[10px] text-text-muted font-mono mt-2">
+              <span className="text-accent"><i className='bx bx-party'></i> Birincil: {fmtUsd(totalPrimaryEarnings)}</span>
+              <span className="text-accent-purple"><i className='bx bx-transfer'></i> İkinci El: {fmtUsd(totalRoyalty)}</span>
             </div>
           </div>
         </DynamicLighting>
 
         <DynamicLighting intensity={0.08}>
           <div className="glass-card p-6 group hover:border-accent-purple/30 transition-colors h-full">
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Toplam Satış</p>
-            <p className="text-3xl md:text-4xl font-extrabold text-text-main">{totalSales}</p>
-            <p className="text-[10px] text-text-muted font-bold mt-2 uppercase">İkinci el transfer</p>
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Toplam Bilet Satışı</p>
+            <p className="text-3xl md:text-4xl font-extrabold text-text-main">{grandTotalSales}</p>
+            <div className="flex flex-col gap-0.5 text-[10px] text-text-muted font-mono mt-2 uppercase">
+              <span>{totalPrimarySales} Birincil Satış</span>
+              <span>{totalSales} İkinci El Transfer</span>
+            </div>
           </div>
         </DynamicLighting>
 
         <DynamicLighting intensity={0.06}>
           <div className="glass-card p-6 group hover:border-border transition-colors h-full">
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Ortalama Royalty</p>
-            <p className="text-3xl md:text-4xl font-extrabold text-accent-purple">{avgRoyalty.toFixed(1)} <span className="text-base font-bold">USDC</span></p>
-            <p className="text-[10px] text-text-muted font-bold mt-2 uppercase">Satış başına</p>
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Ortalama Kazanç</p>
+            <p className="text-3xl md:text-4xl font-extrabold text-accent-purple">{fmtUsd(avgEarnings)}</p>
+            <p className="text-[10px] text-text-muted font-bold mt-2 uppercase">Bilet/İşlem başına</p>
           </div>
         </DynamicLighting>
       </div>
 
-      {/* Per-Event Breakdown */}
+      {/* Per-Event Secondary Breakdown */}
       {eventMap.size > 0 && (
         <div>
           <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-            <i className='bx bxs-bar-chart-alt-2 text-accent'></i> Etkinlik Bazlı Kazanç
+            <i className='bx bxs-bar-chart-alt-2 text-accent'></i> İkinci El Kazanç
           </h3>
           <div className="space-y-3">
             {Array.from(eventMap.entries()).map(([name, data]) => (
@@ -80,11 +105,53 @@ export const ArtistPanel = ({ receipts, partyId }: Props) => {
                   <p className="text-[10px] text-text-muted font-mono">{data.count} satış</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-lg font-extrabold text-accent">{data.total.toFixed(1)} USDC</span>
+                  <span className="text-lg font-extrabold text-accent">{fmtUsd(data.total)}</span>
                   <p className="text-[10px] text-text-muted font-mono">royalty geliri</p>
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Active Events & Potential Primary Earnings */}
+      {myEvents.length > 0 && (
+        <div>
+          <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
+            <i className='bx bx-calendar-star text-accent-purple'></i> Etkinliklerim (İlk Satış)
+          </h3>
+          <div className="space-y-3">
+            {myEvents.map(e => {
+              const priceNum = parseFloat(String(e.payload.price || '0'));
+              const royaltyPctNum = parseFloat(String(e.payload.royaltyPct || '0'));
+              const artistShare = priceNum * (royaltyPctNum / 100);
+              const sold = parseInt(String(e.payload.ticketsSold || '0'));
+              const totalEventEarnings = sold * artistShare;
+
+              return (
+                <div key={e.contractId} className="glass-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-l-4 border-l-accent-purple">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-sm">{e.payload.name}</p>
+                      {e.payload.isCancelled && <span className="text-[8px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-bold">İPTAL</span>}
+                    </div>
+                    <p className="text-[10px] text-text-muted font-mono">
+                      Bilet: {fmtUsd(priceNum)} · Sanatçı Payı: {fmtPct(royaltyPctNum)} ({fmtUsd(artistShare)}/bilet)
+                    </p>
+                  </div>
+                  <div className="text-left sm:text-right flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-4 sm:gap-0">
+                    <div className="text-left sm:text-right bg-surface px-3 py-1.5 rounded-lg border border-border">
+                      <p className="text-[10px] text-text-muted font-bold uppercase mb-0.5">Satılan</p>
+                      <span className="text-sm font-extrabold text-text-main">{sold} Bilet</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xl font-extrabold text-accent-purple">{fmtUsd(totalEventEarnings)}</span>
+                      <p className="text-[10px] text-text-muted font-mono">toplam kazanç</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -119,15 +186,15 @@ export const ArtistPanel = ({ receipts, partyId }: Props) => {
                     </div>
                     <div>
                       <p className="font-bold text-sm">{r.payload.eventName}</p>
-                      <p className="text-[10px] text-text-muted font-mono">{r.payload.ticketSeat} · %{r.payload.royaltyPct} oran</p>
+                      <p className="text-[10px] text-text-muted font-mono">{r.payload.ticketSeat} · {fmtPct(r.payload.royaltyPct)} oran</p>
                       <p className="text-[10px] text-text-muted mt-0.5">
                         {r.payload.seller.slice(0, 10)}... → {r.payload.buyer.slice(0, 10)}...
                       </p>
                     </div>
                   </div>
                   <div className="text-right sm:text-right">
-                    <p className="text-lg font-extrabold text-accent">+{r.payload.royaltyAmount} USDC</p>
-                    <p className="text-[10px] text-text-muted font-mono">satış: {r.payload.salePrice} USDC</p>
+                    <p className="text-lg font-extrabold text-accent">+{fmtUsd(r.payload.royaltyAmount)}</p>
+                    <p className="text-[10px] text-text-muted font-mono">satış: {fmtUsd(r.payload.salePrice)}</p>
                     <p className="text-[8px] font-mono text-text-muted bg-bg px-1.5 py-0.5 rounded inline-block mt-1">
                       CID: {r.contractId.slice(0, 16)}...
                     </p>

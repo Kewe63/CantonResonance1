@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from './Toast';
+import { fmtUsd, fmtPct } from '../utils/format';
 import type { EventContract, TicketContract, ListingContract } from '../services/damlLedger';
 
 interface Props {
@@ -19,6 +20,7 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
   const [selectedEventCid, setSelectedEventCid] = useState<string|null>(null);
   const [sellModal, setSellModal] = useState<{open:boolean; ticketCid:string; price:number}>({open:false,ticketCid:'',price:80});
   const [buying, setBuying] = useState(false);
+  const [isListing, setIsListing] = useState(false);
   const { showToast } = useToast();
 
   const selectedEvent = events.find(e => e.contractId === selectedEventCid);
@@ -49,12 +51,15 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
   };
 
   const handleList = async () => {
+    setIsListing(true);
     try {
       await onListForSale(sellModal.ticketCid, sellModal.price);
       showToast('📢', 'İkinci El Listelendi!', `SecondaryListing kontratı oluşturuldu`);
       setSellModal({open:false,ticketCid:'',price:80});
     } catch (err: any) {
       showToast('❌', 'Hata', err?.message || 'Listeleme başarısız', 'error');
+    } finally {
+      setIsListing(false);
     }
   };
 
@@ -98,10 +103,10 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
               <div className="p-4">
                 <div className="flex justify-between items-center mb-1">
                   <h3 className="font-bold text-base truncate">{event.payload.name}</h3>
-                  <span className="font-mono text-accent font-bold text-sm">{event.payload.price} USDC</span>
+                  <span className="font-mono text-accent font-bold text-sm">{fmtUsd(event.payload.price)}</span>
                 </div>
                 <p className="text-[10px] text-text-muted uppercase tracking-wider">{event.payload.venue} — {event.payload.date}</p>
-                <p className="text-[10px] text-accent-purple mt-1 font-mono">%{event.payload.royaltyPct} royalty → sanatçıya</p>
+                <p className="text-[10px] text-accent-purple mt-1 font-mono">{fmtPct(event.payload.royaltyPct)} royalty → sanatçıya</p>
                 {isSelected && available && (
                   <button onClick={(e)=>{e.stopPropagation();handleBuy(event)}} disabled={buying}
                     className="w-full mt-3 py-2.5 rounded-xl text-xs font-bold bg-text-main text-bg hover:bg-accent hover:text-black active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
@@ -136,7 +141,7 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
               </div>
               <h4 className="font-bold text-sm mb-0.5">{t.payload.eventName}</h4>
               <p className="text-[10px] text-text-muted font-mono mb-1">{t.payload.seat}</p>
-              <p className="text-[10px] text-text-muted mb-3">Fiyat: <span className="text-accent font-bold">{t.payload.currentPrice} USDC</span></p>
+              <p className="text-[10px] text-text-muted mb-3">Fiyat: <span className="text-accent font-bold">{fmtUsd(t.payload.currentPrice)}</span></p>
               {!t.payload.isUsed && (
                 <div className="flex gap-2">
                   <button onClick={()=>setSellModal({open:true, ticketCid:t.contractId, price:Math.round(parseFloat(t.payload.currentPrice)*1.5)})}
@@ -169,10 +174,10 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
                   <div>
                     <p className="font-bold text-sm">{l.payload.ticket.eventName}</p>
                     <p className="text-[10px] text-text-muted font-mono">{l.payload.ticket.seat} · Satıcı: {l.payload.seller.slice(0,12)}...</p>
-                    <p className="text-[10px] text-accent-purple mt-1">Royalty: {royalty.toFixed(1)} USDC (%{l.payload.ticket.royaltyPct})</p>
+                    <p className="text-[10px] text-accent-purple mt-1">Royalty: {fmtUsd(royalty)} ({fmtPct(l.payload.ticket.royaltyPct)})</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-lg font-extrabold text-accent">{l.payload.price} USDC</span>
+                    <span className="text-lg font-extrabold text-accent">{fmtUsd(l.payload.price)}</span>
                     {isMine ? (
                       <button onClick={()=>onCancelListing(l.contractId)} className="px-4 py-2 rounded-lg text-[10px] font-bold border border-red-500/30 text-red-500 hover:bg-red-500/10">İptal</button>
                     ) : (
@@ -206,7 +211,9 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
                     <span className="text-accent-purple font-bold">{(sellModal.price * 0.15).toFixed(1)} USDC</span>
                   </div>
                 </div>
-                <button onClick={handleList} className="w-full btn-primary">📢 Listeye Ekle</button>
+                <button onClick={handleList} disabled={isListing} className="w-full btn-primary disabled:opacity-50">
+                  {isListing ? <><i className='bx bx-loader-alt animate-spin'></i> İşleniyor...</> : '📢 Listeye Ekle'}
+                </button>
               </div>
             </motion.div>
           </motion.div>
