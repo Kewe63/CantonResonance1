@@ -751,7 +751,7 @@ async function startServer() {
               'Authorization': relayAuth,
               'Content-Type': 'application/octet-stream',
             },
-            body: darContent,
+            body: new Uint8Array(darContent),
           }, 25_000);
 
           if (attempt.response.ok) {

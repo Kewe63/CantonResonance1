@@ -26,17 +26,19 @@ import { WalletLogin } from './components/WalletLogin';
 import { OrganizerPanel } from './components/OrganizerPanel';
 import { UserPanel } from './components/UserPanel';
 import { ArtistPanel } from './components/ArtistPanel';
+import { MarketPanel } from './components/MarketPanel';
 import { LedgerFeed } from './components/LedgerFeed';
 import { useI18n } from './i18n';
 
 // ─── Types ────────────────────────────────────────────────────
 
-type Role = 'organizer' | 'user' | 'artist';
+type Role = 'organizer' | 'user' | 'artist' | 'market';
 
 const ROLE_ICONS: Record<Role, string> = {
   organizer: 'bxs-badge-check',
   user: 'bxs-user',
   artist: 'bxs-music',
+  market: 'bx-store-alt',
 };
 
 function matchesEventHintPayload(payload: EventContract['payload'], eventHint: EventContract['payload']): boolean {
@@ -77,6 +79,7 @@ function AppInner() {
     organizer: { label: t('role.organizer'), icon: ROLE_ICONS.organizer },
     user: { label: t('role.user'), icon: ROLE_ICONS.user },
     artist: { label: t('role.artist'), icon: ROLE_ICONS.artist },
+    market: { label: t('role.market'), icon: ROLE_ICONS.market },
   };
 
   // ─── Theme ─────────────────────────────────────────────────
@@ -626,6 +629,15 @@ function AppInner() {
                     events={events}
                     receipts={receipts}
                     partyId={partyId || ''}
+                  />
+                )}
+                {role === 'market' && (
+                  <MarketPanel
+                    events={events}
+                    listings={listings}
+                    partyId={partyId || ''}
+                    onBuyTicket={handleBuyTicket}
+                    onBuySecondary={handleBuySecondary}
                   />
                 )}
               </div>

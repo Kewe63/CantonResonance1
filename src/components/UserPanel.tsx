@@ -127,13 +127,22 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
           <i className='bx bxs-wallet text-accent-purple'></i> {t('user.wallet')}
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {tickets.length === 0 ? (
+          {(() => {
+            const myListedTicketKeys = new Set(
+              listings
+                .filter(l => l.payload.seller === partyId)
+                .map(l => `${l.payload.ticket.eventName}::${l.payload.ticket.seat}`)
+            );
+            const walletTickets = tickets.filter(
+              t_ticket => !myListedTicketKeys.has(`${t_ticket.payload.eventName}::${t_ticket.payload.seat}`)
+            );
+            return walletTickets.length === 0 ? (
             <div className="col-span-full py-12 border-2 border-dashed border-border rounded-3xl flex flex-col items-center justify-center text-text-muted">
               <i className='bx bx-purchase-tag-alt text-5xl mb-3 opacity-10'></i>
               <p className="text-sm">{t('user.walletEmpty')}</p>
               <p className="text-[10px] uppercase tracking-widest mt-1">{t('user.walletEmptyHint')}</p>
             </div>
-          ) : tickets.map((t_ticket,i) => (
+          ) : walletTickets.map((t_ticket,i) => (
             <motion.div key={t_ticket.contractId} initial={{scale:0.9,opacity:0}} animate={{scale:1,opacity:1}} transition={{delay:i*0.05}} className="glass-card p-4">
               <div className="flex justify-between items-start mb-2">
                 <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border bg-accent-purple/10 text-accent-purple border-accent-purple/20">
@@ -157,7 +166,8 @@ export const UserPanel = ({ events, tickets, listings, partyId, onBuyTicket, onL
                 </div>
               )}
             </motion.div>
-          ))}
+          ));
+          })()}
         </div>
       </div>
 
