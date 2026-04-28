@@ -40,12 +40,14 @@ Canton Resonance manages event tickets, artist royalty payments, and organizer�
 
 ## ✨ Features
 
-- **Daml Smart Contracts** — Secure, auditable business logic with `Ticket` and `Event` templates
+- **Daml Smart Contracts** — Secure, auditable business logic with `Ticket`, `Event`, and `SecondaryListing` templates
 - **Canton Sandbox Support** — Local development with unsigned JWT; no external wallet required
 - **Canton DevNet Support** — Live network integration with signed Bearer tokens
 - **Bridge Layer** — Translates Ledger API v2 endpoints (`/v2/commands/submit-and-wait`, `/v2/state/active-contracts`) into the legacy JSON API format
 - **Dynamic Package ID Resolution** — Automatically reads `packageId` from build output
 - **Party Management** — Automatic party creation and Admin token generation in Sandbox
+- **Secondary Market (2. El Piyasası)** — Users can list tickets for resale; buyers can purchase or make offers. Own listings show disabled Buy/Offer buttons for clear UX
+- **Market Panel** — Dual-tab marketplace UI: Primary Market (organizer events) and Secondary Market (user resale listings)
 - **React 19 UI** — Tailwind CSS v4 + Motion animations + Lucide icons
 - **Gemini AI Integration** — AI-powered suggestions via `@google/genai` SDK
 - **Ethers.js v6** — Included for optional on-chain connectivity
@@ -187,6 +189,11 @@ CantonResonance1/
 ├── src/                           # React frontend
 │   ├── daml.js/                   # Daml codegen output (JS bindings)
 │   ├── components/                # React components
+│   │   ├── MarketPanel.tsx        # Marketplace (primary + secondary tabs)
+│   │   ├── UserPanel.tsx          # User wallet & ticket management
+│   │   ├── OrganizerPanel.tsx     # Organizer event management
+│   │   ├── ArtistPanel.tsx        # Artist royalty dashboard
+│   │   └── Toast.tsx              # Notification toasts
 │   ├── hooks/                     # Custom React hooks
 │   ├── pages/                     # Page components
 │   └── main.tsx                   # Application entry point
@@ -416,7 +423,8 @@ For bugs or feature requests, use [GitHub Issues](https://github.com/Kewe63/Cant
 ## 🗺 Roadmap
 
 - [ ] User authentication UI (DevNet JWT login flow)
-- [ ] Ticket transfer and secondary market support
+- [x] Ticket transfer and secondary market support
+- [x] Secondary market Buy / Offer buttons (visible but disabled for own listings)
 - [ ] Automated royalty distribution flow
 - [ ] Multi-party support on Canton DevNet
 - [ ] Mobile-friendly responsive design
@@ -427,6 +435,15 @@ For bugs or feature requests, use [GitHub Issues](https://github.com/Kewe63/Cant
 ---
 
 ## 📝 Changelog
+
+### v0.2.0 — April 28, 2026
+- **Secondary Market (2. El Piyasası)** — Full resale listing, buy, and offer flow
+- **MarketPanel** — Dual-tab marketplace with Primary and Secondary market views
+- Buy / Offer buttons now visible (but disabled) on user's own secondary market listings
+- Wallet view filters out tickets already listed on the secondary market
+- Sell modal auto-closes on successful listing
+- Consistent numeric formatting (`fmtUsd`, `fmtPct`) across all UI surfaces
+- i18n keys added for all market-related strings
 
 ### v0.1.0 — April 2026
 - Initial stable release
