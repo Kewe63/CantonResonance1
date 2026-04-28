@@ -6,3 +6,19 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# AI & Assistant artifacts
+.claude/
+
+# Local Daml artifacts
+.daml/
+*.dalf
+*.dar
+
+# IDE & Logs
+.vscode/
+log/
+navigator.log
+
+# Temporary / Scratch files
+scratch/
