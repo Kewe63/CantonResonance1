@@ -465,3 +465,4 @@ This project does not currently specify a license. Please contact the repository
 
 ---
 
+- Built with ❤️ for the CANTON Hackathon.
