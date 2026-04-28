@@ -55,6 +55,141 @@ Canton Resonance manages event tickets, artist royalty payments, and organizer�
 
 ---
 
+## 🏗 Architecture & Working Scheme
+
+Canton Resonance follows a **three-tier architecture** connecting a React SPA frontend to the Canton distributed ledger through a Node.js bridge/proxy layer. The system supports two operational modes: **Sandbox** (local development) and **DevNet** (live Canton Network).
+
+### System Topology
+
+```mermaid
+graph TB
+    subgraph CLIENT["🖥 Browser (React 19 + Vite)"]
+        UI["App.tsx — State & Routing"]
+        AUTH["authService — JWT / Keycloak OIDC"]
+        LEDGER["damlLedger — Ledger Client"]
+        CANTON_SVC["cantonService — API Orchestration"]
+    end
+
+    subgraph SERVER["⚙️ Node.js (Express)"]
+        PROXY["/api/canton/* — Sandbox Proxy"]
+        BRIDGE["/bridge/* — DevNet Bridge"]
+        PKG["Package ID Resolver"]
+        CACHE["Contract Cache (TTL 5 min)"]
+    end
+
+    subgraph CANTON["🔗 Canton Ledger"]
+        SANDBOX["Canton Sandbox\n(Docker · localhost:7575)"]
+        DEVNET["Canton DevNet\n(Noders NaaS · Keycloak)"]
+        GRPC["gRPC Ledger API :6865"]
+        JSON_API["JSON API :7575"]
+    end
+
+    UI --> CANTON_SVC
+    CANTON_SVC --> LEDGER
+    LEDGER --> AUTH
+    LEDGER -- "Sandbox Mode" --> PROXY
+    LEDGER -- "DevNet Mode" --> BRIDGE
+    PROXY --> JSON_API
+    BRIDGE --> DEVNET
+    JSON_API --> GRPC
+    GRPC --> SANDBOX
+```
+
+### Dual-Mode Operation
+
+| Aspect | 🧪 Sandbox (Local) | 🌐 DevNet (Live) |
+|---|---|---|
+| **Ledger** | Docker container (`localhost:7575`) | Noders NaaS participant node |
+| **Auth** | Unsigned JWT (auto-generated) | Keycloak OIDC (`access_token`) |
+| **API Path** | `/api/canton/*` → Express proxy | `/bridge/*` → Ledger API v2 bridge |
+| **Party** | Auto-allocated (`Setup.daml`) | Pre-registered via Keycloak |
+| **Package ID** | Read from local codegen output | Discovered from `/v2/packages` |
+
+### Smart Contract Lifecycle
+
+The platform uses **4 core Daml templates** and **1 auxiliary template** that form a complete ticket lifecycle:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Event : Organizer creates event
+    Event --> Event : BuyTicket (ticketsSold++)
+    Event --> Event_Cancelled : CancelEvent
+
+    Event --> UserTicket : BuyTicket → ticket minted
+    UserTicket --> SecondaryListing : ListForSale
+    UserTicket --> UsedTicket : UseTicket (enter event)
+
+    SecondaryListing --> UserTicket : BuySecondary → new owner
+    SecondaryListing --> RoyaltyReceipt : BuySecondary → royalty split
+    SecondaryListing --> UserTicket : CancelListing → return to wallet
+    SecondaryListing --> SecondaryListing : UpdatePrice
+```
+
+| Template | Signatory | Purpose |
+|---|---|---|
+| `Event` | Organizer | Primary event with ticket inventory and pricing |
+| `UserTicket` | Organizer + Owner | A purchased ticket in a user's wallet |
+| `SecondaryListing` | Seller + Organizer | Ticket listed for resale on the secondary market |
+| `RoyaltyReceipt` | Organizer + Seller | Immutable record of royalty payment to artist |
+| `UsedTicket` | Organizer + Owner | Record that a ticket was consumed (event entry) |
+
+### Data Flow: Ticket Purchase → Resale → Royalty
+
+```mermaid
+sequenceDiagram
+    participant Org as 🎤 Organizer
+    participant Ledger as 🔗 Canton Ledger
+    participant Buyer as 🎫 Buyer
+    participant Seller as 💰 Seller
+    participant Artist as 🎵 Artist
+
+    Org->>Ledger: create Event
+    Note over Ledger: Event contract active
+
+    Buyer->>Ledger: exercise BuyTicket
+    Ledger-->>Buyer: UserTicket minted
+    Ledger-->>Org: Event.ticketsSold++
+
+    Buyer->>Ledger: exercise ListForSale (price)
+    Note over Ledger: UserTicket archived → SecondaryListing created
+
+    Seller->>Ledger: exercise BuySecondary (newOwner)
+    Ledger-->>Seller: sellerShare = price − royalty
+    Ledger-->>Artist: RoyaltyReceipt (artistRoyalty)
+    Ledger-->>Buyer: New UserTicket (owner = newOwner)
+```
+
+### Frontend Component Tree
+
+```
+App.tsx (state + routing + polling)
+├── WalletLogin           → Party authentication (Sandbox / DevNet)
+├── OrganizerPanel        → Create events, manage inventory, cancel
+├── UserPanel             → Wallet: tickets, list for sale, use ticket
+│   ├── Sell Modal        → Set resale price, enforce max multiplier
+│   └── Wallet Filters    → Exclude tickets already listed
+├── MarketPanel           → Dual-tab marketplace
+│   ├── Primary Tab       → Buy directly from organizer events
+│   └── Secondary Tab     → Browse resale listings, buy or offer
+│       └── Own listings  → Buttons visible but disabled
+├── ArtistPanel           → Royalty dashboard, revenue tracking
+└── LedgerFeed            → Real-time contract activity stream
+```
+
+### Key Architectural Decisions
+
+1. **Sticky Contract Cache** — After a `create` or `exercise` command, the frontend injects a synthetic contract into the UI immediately. A polling loop then reconciles with the ledger until the real contract ID appears, ensuring zero-latency UX.
+
+2. **Bridge Layer (DevNet)** — The Express server translates Ledger API v2 (`/v2/commands/submit-and-wait`) responses into the legacy JSON API format (`/v1/*`), so the frontend uses a single contract shape regardless of mode.
+
+3. **Automatic Package ID Resolution** — In DevNet mode, the client fetches visible package IDs from `/v2/packages` and tries each candidate until the template is found. This handles DAR redeployments transparently.
+
+4. **Atomic Royalty Settlement** — The `BuySecondary` choice computes the artist royalty split and creates a `RoyaltyReceipt` within the same Canton transaction, guaranteeing atomicity.
+
+5. **Archived Contract Tracking** — `localStorage` persists archived contract IDs so that stale/zombie contracts never re-emerge after page refreshes or HMR reloads.
+
+---
+
 ## 🛠 Requirements
 
 | Dependency | Version |
